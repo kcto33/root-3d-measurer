@@ -277,7 +277,10 @@ def _branching(axis, children):
     count = len(positions)
     confirmed = axis.get('confirmation_status') == 'CONFIRMED' and all(
         a.get('confirmation_status') == 'CONFIRMED' for a in children)
-    status = 'ANNOTATION_CONFIRMED' if confirmed else 'CANDIDATE_AXIS_RELATIONSHIPS'
+    auto = axis.get('confirmation_status') == 'AUTO_INFERRED' and all(
+        a.get('confirmation_status') in ('AUTO_INFERRED', 'CONFIRMED') for a in children)
+    status = ('ANNOTATION_CONFIRMED' if confirmed else
+              'AUTO_INFERRED_AXIS_RELATIONSHIPS' if auto else 'CANDIDATE_AXIS_RELATIONSHIPS')
     whole = _result(count/axis['length'] if axis['length'] > 0 else None,
                     status if axis['length'] > 0 else 'ZERO_MOTHER_AXIS_LENGTH',
                     numerator=count,denominator=axis['length'],denominator_name='whole_observed_mother_axis_length',
@@ -328,13 +331,14 @@ def _summaries(axes):
             types[(axis.get('root_type','unknown'),confirmation)].append(axis)
         confirmations[confirmation].append(axis)
         order = axis.get('developmental_order')
-        order_status = 'ANNOTATION_CONFIRMED' if order is not None else 'CANDIDATE'
+        order_status = ('ANNOTATION_CONFIRMED' if order is not None and confirmation == 'CONFIRMED' else
+                        'AUTO_INFERRED' if order is not None and confirmation == 'AUTO_INFERRED' else 'CANDIDATE')
         if order is None:
             order = axis.get('candidate_developmental_order')
         if order is not None and confirmation!='UNRESOLVED':
             orders[(order,order_status)].append(axis)
         edge_orders = axis.get('strahler_orders')
-        edge_order_status = 'ANNOTATION_CONFIRMED'
+        edge_order_status = 'AUTO_INFERRED' if confirmation == 'AUTO_INFERRED' else 'ANNOTATION_CONFIRMED'
         if not edge_orders:
             edge_orders = axis.get('candidate_strahler_orders') or []
             edge_order_status = 'CANDIDATE'
@@ -457,7 +461,8 @@ def build_axis_traits(graph, architecture, samples, *, options=None, scale_mm_pe
         parent = by_id[parent_id]
         relation = dict(parent_axis_id=parent_id,child_axis_id=axis['axis_id'],
                         attachment_node_id=axis['attachment_node_id'],attachment_arc=axis['_attachment'],
-                        confirmation_status='ANNOTATION_CONFIRMED' if axis.get('confirmation_status')=='CONFIRMED' and parent.get('confirmation_status')=='CONFIRMED' else 'CANDIDATE',
+                        confirmation_status=('ANNOTATION_CONFIRMED' if axis.get('confirmation_status')=='CONFIRMED' and parent.get('confirmation_status')=='CONFIRMED' else
+                            'AUTO_INFERRED' if axis.get('confirmation_status') in ('AUTO_INFERRED','CONFIRMED') and parent.get('confirmation_status') in ('AUTO_INFERRED','CONFIRMED') else 'CANDIDATE'),
                         biological_accuracy_validated=False,unit=unit)
         unresolved=axis.get('confirmation_status')=='UNRESOLVED' or parent.get('confirmation_status')=='UNRESOLVED'
         if not parent['_directed'] or not axis['_directed'] or parent.get('closed') or axis.get('closed') or unresolved:

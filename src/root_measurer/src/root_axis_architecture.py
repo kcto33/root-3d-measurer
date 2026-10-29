@@ -1,9 +1,9 @@
 """Explicitly rooted, reviewable root-axis interpretations of an unchanged graph.
 
 Geometric paths are not biological roots.  A root base or crown must be annotated
-before a tree component can be oriented.  Straight-through choices at junctions
-are candidates until reviewed; ties are retained as unresolved.  Cycles and
-components with multiple competing bases are preserved, never cut into a tree.
+before a tree component can be oriented.  Radius-qualified, windowed tangent, downstream length and hierarchy evidence
+can identify high-confidence *geometric* continuations. Low-confidence cases
+remain reviewable. Cycles and competing bases are never cut into a tree.
 
 All coordinates and arc lengths in this module use model units.  The annotation
 document must be bound to the source measurement by the caller.  Axis identifiers
@@ -154,8 +154,9 @@ def _axis(nodes, component_id, points, lengths, path_ids, endpoints, oriented):
         candidate_strahler_order_base=None, strahler_order_base=None)
 
 
-def build_axis_architecture(graph, *, annotations=None, scale_mm_per_model_unit=None):
-    """Partition every graph edge into candidate or manually confirmed root axes.
+def build_axis_architecture(graph, *, annotations=None, scale_mm_per_model_unit=None,
+                            radius_samples=None, inference_options=None):
+    """Partition every graph edge into candidate, automatically inferred or reviewed axes.
 
     ``annotations`` accepts only ``root_bases`` (node_id, optional root_type),
     ``junction_continuations`` (node_id, incoming_node_id, outgoing_node_id or
@@ -191,6 +192,15 @@ def build_axis_architecture(graph, *, annotations=None, scale_mm_per_model_unit=
     path_ids = {tuple(e): f"path{b['branch_id']:05d}" for b in ledger['branches'] for e in b['source_edge_ids']}
     bases, overrides, endpoints, root_types, confirm_axes, confirm_components, normalized = _annotations(
         annotations, len(points), components, adjacency)
+    multi_cue = radius_samples is not None
+    if multi_cue:
+        from root_axis_auto_inference import radius_support_by_edge, infer_continuation, METHOD as INFERENCE_METHOD
+        from root_axis_traits import axis_trait_settings
+        inference_config = axis_trait_settings(inference_options)
+        support = radius_support_by_edge(radius_samples)
+        factor = 1.0 if scale_mm_per_model_unit is None else float(scale_mm_per_model_unit)
+    elif inference_options is not None:
+        raise ValueError('INFERENCE_OPTIONS_REQUIRE_RADIUS_SAMPLES')
     source_payload = dict(points=points.tolist(), edges=[list(e) for e in edges])
     graph_sha = hashlib.sha256(json.dumps(source_payload, separators=(',', ':'), allow_nan=False).encode()).hexdigest()
     axes, component_rows, decisions = [], [], []
@@ -209,7 +219,8 @@ def build_axis_architecture(graph, *, annotations=None, scale_mm_per_model_unit=
         row = dict(component_id=component_id, node_count=len(nodes), edge_count=edge_count,
                    cycle_rank=cycle_rank, root_base_node_ids=marked_bases,
                    candidate_root_base_node_ids=[i for i in nodes if len(adjacency[i]) == 1],
-                   status=reason or 'ROOTED_CANDIDATE', unresolved_junction_node_ids=[], axis_ids=[])
+                   status=reason or 'ROOTED_CANDIDATE', unresolved_junction_node_ids=[],
+                   auto_inferred_junction_node_ids=[], review_recommended_junction_node_ids=[], axis_ids=[])
         if reason:
             for branch in branches_by_component[component_id]:
                 axis = _axis(branch['source_node_ids'], component_id, points, lengths, path_ids, endpoints, False)
@@ -231,10 +242,12 @@ def build_axis_architecture(graph, *, annotations=None, scale_mm_per_model_unit=
         if len(parent) != len(nodes):
             raise AssertionError('ROOTED_COMPONENT_COVERAGE')
         node_orders = {}
+        longest = {}
         for node in reversed(traversal):
             child_orders = [node_orders[c] for c in children[node]]
             maximum = max(child_orders, default=1)
             node_orders[node] = maximum + int(bool(child_orders) and child_orders.count(maximum) >= 2)
+            longest[node] = max((lengths[_edge(node, child)] + longest[child] for child in children[node]), default=0.0)
             if parent[node] is not None:
                 edge_orders[_edge(parent[node], node)] = node_orders[node]
         continuation = {}
@@ -246,20 +259,30 @@ def build_axis_architecture(graph, *, annotations=None, scale_mm_per_model_unit=
                 continuation[node] = child_nodes[0] if child_nodes else None
                 continue
             incoming = parent[node]
-            vector = points[node] - points[incoming]
-            norm = math.hypot(*vector)
-            alternatives = []
-            for child in child_nodes:
-                other = points[child] - points[node]
-                other_norm = math.hypot(*other)
-                score = None if not norm or not other_norm else float(np.clip(np.dot(vector / norm, other / other_norm), -1, 1))
-                alternatives.append(dict(outgoing_node_id=child, alignment_cosine=score))
+            if multi_cue:
+                proposed, proposed_status, alternatives, confidence, evidence = infer_continuation(
+                    node, incoming, child_nodes, points=points, parent=parent, children=children,
+                    lengths=lengths, node_orders=node_orders, longest=longest,
+                    radius_support=support, config=inference_config, factor=factor)
+            else:
+                vector = points[node] - points[incoming]
+                norm = math.hypot(*vector)
+                alternatives = []
+                for child in child_nodes:
+                    other = points[child] - points[node]
+                    other_norm = math.hypot(*other)
+                    score = None if not norm or not other_norm else float(np.clip(np.dot(vector / norm, other / other_norm), -1, 1))
+                    alternatives.append(dict(outgoing_node_id=child, alignment_cosine=score))
+                confidence, evidence = 'NOT_ASSESSED', []
             if node in overrides:
                 annotated_in, selected = overrides[node]
                 if annotated_in != incoming or (selected is not None and selected not in child_nodes):
                     raise ValueError('CONTINUATION_CONFLICTS_WITH_ROOTED_DIRECTION')
                 consumed_overrides.add(node)
                 status = 'EXPLICIT_TERMINATION' if selected is None else 'EXPLICIT_CONTINUATION'
+                confidence = 'USER_SPECIFIED'
+            elif multi_cue:
+                selected, status = proposed, proposed_status
             else:
                 finite = sorted((a for a in alternatives if a['alignment_cosine'] is not None),
                                 key=lambda a: (-a['alignment_cosine'], a['outgoing_node_id']))
@@ -267,13 +290,20 @@ def build_axis_architecture(graph, *, annotations=None, scale_mm_per_model_unit=
                         (len(finite) > 1 and abs(finite[0]['alignment_cosine'] - finite[1]['alignment_cosine']) <= 1e-9))
                 if tied:
                     selected = None; status = 'UNRESOLVED_CONTINUATION'
-                    row['unresolved_junction_node_ids'].append(node)
                 else:
                     selected = finite[0]['outgoing_node_id']; status = 'INFERRED_STRAIGHTEST_CANDIDATE'
+            if status == 'UNRESOLVED_CONTINUATION':
+                row['unresolved_junction_node_ids'].append(node)
+            elif status == 'AUTO_INFERRED_CONTINUATION':
+                row['auto_inferred_junction_node_ids'].append(node)
+            elif status == 'INFERRED_MULTI_CUE_CANDIDATE':
+                row['review_recommended_junction_node_ids'].append(node)
             continuation[node] = selected
             decisions.append(dict(component_id=component_id, node_id=node, incoming_node_id=incoming,
                 outgoing_node_id=selected, status=status, alternatives=alternatives,
-                method='incident-edge cosine; a review candidate, not automatic biological identity'))
+                confidence_tier=confidence, supporting_evidence=evidence,
+                method=INFERENCE_METHOD if multi_cue else 'incident-edge cosine; review candidate',
+                biological_identity_validated=False))
         pending = [(base, child, None, None, 0) for child in reversed(children[base])]
         while pending:
             start, child, parent_axis, attach_arc, order = pending.pop()
@@ -307,6 +337,9 @@ def build_axis_architecture(graph, *, annotations=None, scale_mm_per_model_unit=
                 pending.append((node, side, axis['axis_id'], location, order + 1))
         if row['unresolved_junction_node_ids']:
             row['status'] = 'ROOTED_UNRESOLVED_CONTINUATION'
+        elif multi_cue:
+            row['status'] = ('ROOTED_REVIEW_RECOMMENDED' if row['review_recommended_junction_node_ids']
+                             else 'ROOTED_AUTO_INFERRED')
         component_rows.append(row)
     if set(overrides) != consumed_overrides:
         raise ValueError('CONTINUATION_REQUIRES_UNIQUE_ROOTED_TREE_COMPONENT')
@@ -319,7 +352,7 @@ def build_axis_architecture(graph, *, annotations=None, scale_mm_per_model_unit=
         row = component_rows[component_id]
         if row['status'] == 'ROOTED_UNRESOLVED_CONTINUATION':
             raise ValueError('UNRESOLVED_CONTINUATION_REQUIRES_EXPLICIT_OVERRIDE')
-        if row['status'] != 'ROOTED_CANDIDATE':
+        if row['status'] not in ('ROOTED_CANDIDATE', 'ROOTED_AUTO_INFERRED', 'ROOTED_REVIEW_RECOMMENDED'):
             raise ValueError('COMPONENT_CONFIRMATION_REQUIRES_UNIQUE_ROOTED_TREE')
         confirm_axes.update(row['axis_ids'])
     for axis_id in confirm_axes:
@@ -334,6 +367,12 @@ def build_axis_architecture(graph, *, annotations=None, scale_mm_per_model_unit=
             axis.update(root_type=root_types[axis_id], root_type_status='AXIS_ANNOTATION')
         if parent_id:
             by_id[parent_id]['children_axis_ids'].append(axis_id)
+        if axis['orientation_status'] == 'ROOTED_BASE_TO_APEX' and component_rows[axis['component_id']]['status'] == 'ROOTED_AUTO_INFERRED':
+            axis['confirmation_status'] = 'AUTO_INFERRED'
+            if parent_id is None or by_id[parent_id]['developmental_order'] is not None:
+                axis['developmental_order'] = axis['candidate_developmental_order']
+            if parent_id:
+                axis['relationship_status'] = 'AUTO_INFERRED_PARENT_RELATION'
         if axis_id in confirm_axes:
             axis['confirmation_status'] = 'CONFIRMED'
             if parent_id is None or by_id[parent_id]['developmental_order'] is not None:
@@ -351,6 +390,11 @@ def build_axis_architecture(graph, *, annotations=None, scale_mm_per_model_unit=
                 axis['strahler_order_base'] = axis['candidate_strahler_order_base']
         elif confirmed:
             row['status'] = 'ROOTED_PARTIALLY_CONFIRMED'
+        elif component_axes and all(a['confirmation_status'] == 'AUTO_INFERRED' for a in component_axes):
+            row['status'] = 'ROOTED_AUTO_INFERRED'
+            for axis in component_axes:
+                axis['strahler_orders'] = list(axis['candidate_strahler_orders'])
+                axis['strahler_order_base'] = axis['candidate_strahler_order_base']
     assigned = [tuple(e) for a in axes for e in a['edge_ids']]
     if len(assigned) != len(edges) or len(set(assigned)) != len(edges) or set(assigned) != set(edges):
         raise AssertionError('ROOT_AXES_MUST_PARTITION_ALL_ORIGINAL_EDGES_EXACTLY_ONCE')
@@ -359,8 +403,10 @@ def build_axis_architecture(graph, *, annotations=None, scale_mm_per_model_unit=
         raise AssertionError('ROOT_AXIS_PARTITION_CHANGED_LENGTH')
     rooted = [a for a in axes if a['orientation_status'] == 'ROOTED_BASE_TO_APEX']
     confirmed_count = sum(a['confirmation_status'] == 'CONFIRMED' for a in axes)
+    auto_count = sum(a['confirmation_status'] == 'AUTO_INFERRED' for a in axes)
     status = ('GEOMETRY_ONLY' if not rooted else
               'CONFIRMED_ARCHITECTURE' if confirmed_count == len(axes) and not ledger['isolated_node_ids'] else
+              'AUTO_INFERRED_ARCHITECTURE' if auto_count and auto_count + confirmed_count == len(axes) and not ledger['isolated_node_ids'] else
               'UNRESOLVED_ARCHITECTURE' if any(a['confirmation_status'] == 'UNRESOLVED' for a in axes) and len(rooted) == len(axes) else
               'CANDIDATE_ARCHITECTURE' if len(rooted) == len(axes) and not ledger['isolated_node_ids'] else
               'PARTIAL_ARCHITECTURE')
@@ -369,16 +415,18 @@ def build_axis_architecture(graph, *, annotations=None, scale_mm_per_model_unit=
         coordinate_units='model_units', scale_mm_per_model_unit=None if scale_mm_per_model_unit is None else float(scale_mm_per_model_unit),
         axes=axes, components=component_rows, junction_decisions=decisions,
         rooted_edge_orders=[dict(edge_nodes=list(e), candidate_strahler_order=o,
-            strahler_order=o if component_rows[edge_components[e]]['status'] == 'ROOTED_CONFIRMED' else None)
+            strahler_order=o if component_rows[edge_components[e]]['status'] in ('ROOTED_CONFIRMED', 'ROOTED_AUTO_INFERRED') else None)
             for e, o in sorted(edge_orders.items())],
         annotations=normalized,
         edge_partition=dict(source_edge_count=len(edges), assigned_edge_count=len(assigned),
             all_source_edges_owned_exactly_once=True, total_length_model_units=total),
         isolated_node_ids=list(ledger['isolated_node_ids']), preserved_cycle_rank=ledger['source_cycle_rank'],
         input_graph_unchanged=True, automatic_base_selection=False,
+        inference_method=INFERENCE_METHOD if multi_cue else 'incident-edge cosine',
+        inference_uses_qualified_radii=multi_cue, confidence_is_calibrated_probability=False,
         developmental_order_definition='basal axes = 0; each lateral-axis attachment increments by one',
         strahler_order_definition='per rooted graph edge; terminal edge = 1; at least two maximum-order children increment the maximum',
-        qualifications=['Automatic straightness choices are candidates until explicitly reviewed.',
+        qualifications=['Multi-cue high-confidence choices are geometric AUTO_INFERRED, never biological proof; uncertain choices require review.' if multi_cue else 'Automatic straightness choices are candidates until explicitly reviewed.',
             'A graph endpoint is not a biological root tip without annotation.',
             'Cycles and competing root bases are preserved without tree repair.',
             'A single continuous axis may contain several Strahler edge orders.',

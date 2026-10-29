@@ -97,7 +97,8 @@ def analyze_measurement(measurement, *, options=None, annotation_profile=None):
                  coordinate_units=report.get('coordinate_units', 'model_units'))
     scale = report.get('scale_mm_per_model_unit')
     architecture = build_axis_architecture(graph, annotations=annotations,
-                                           scale_mm_per_model_unit=scale)
+        scale_mm_per_model_unit=scale, radius_samples=samples,
+        inference_options={k: v for k, v in config.items() if k in AXIS_OPTIONS})
     traits = build_axis_traits(graph, architecture, samples,
         options={k: v for k, v in config.items() if k in AXIS_OPTIONS},
         scale_mm_per_model_unit=scale)
@@ -114,7 +115,7 @@ def analyze_measurement(measurement, *, options=None, annotation_profile=None):
         distributions=distributions, architecture=architecture, axis_traits=traits,
         measurement_coverage=coverage, source_geometry_unchanged=True,
         confirmation_is_accuracy_validation=False,
-        scope='observed geometry and user-reviewed root axes; no mass, soil, time or crop-specific inference')
+        scope='observed geometry and explicitly based auto-inferred or human-reviewed root axes; no mass, soil, time or crop-specific inference')
 
 
 def _flatten(value, prefix=''):

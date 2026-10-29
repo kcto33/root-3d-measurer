@@ -122,14 +122,18 @@ export async function installPhenotyping({apiURL, report, graph, paths, scene, p
   function statusLabel(status) {
     const exact = {GEOMETRY_ONLY:'仅几何路径／未定根轴', ROOT_BASE_REQUIRED:'尚未指定根基',
       ROOTED_CANDIDATE:'候选结构，待核对', ROOTED_CONFIRMED:'人工确认', ROOTED_PARTIALLY_CONFIRMED:'部分根轴已确认',
+      ROOTED_AUTO_INFERRED:'多证据自动推断（待生物学验证）', ROOTED_REVIEW_RECOMMENDED:'部分续接证据不足，建议核对',
       ROOTED_UNRESOLVED_CONTINUATION:'分叉续接有歧义', BLOCKED_CYCLIC_COMPONENT:'保留闭环，未推断层级',
       BLOCKED_MULTIPLE_BASES_IN_COMPONENT:'同一分量有多个竞争根基', NO_EDGES:'没有可测边',
       CONFIRMED_ARCHITECTURE:'人工确认的根轴解释', CANDIDATE_ARCHITECTURE:'候选根轴解释',
+      AUTO_INFERRED_ARCHITECTURE:'多证据自动推断的根轴解释',
       UNRESOLVED_ARCHITECTURE:'根轴解释仍有歧义', PARTIAL_ARCHITECTURE:'部分结构可解释',
-      CONFIRMED:'人工确认', CANDIDATE:'候选', UNRESOLVED:'待消除歧义',
-      ANNOTATION_CONFIRMED:'人工确认／精度另验', CANDIDATE_AXIS_RELATIONSHIPS:'候选父子关系',
+      CONFIRMED:'人工确认', AUTO_INFERRED:'自动推断／非人工确认', CANDIDATE:'候选', UNRESOLVED:'待消除歧义',
+      ANNOTATION_CONFIRMED:'人工确认／精度另验', AUTO_INFERRED_AXIS_RELATIONSHIPS:'自动推断父子关系', CANDIDATE_AXIS_RELATIONSHIPS:'候选父子关系',
       EXPLICIT_CONTINUATION:'已指定续接', EXPLICIT_TERMINATION:'已指定本根终止',
-      INFERRED_STRAIGHTEST_CANDIDATE:'自动直顺候选', UNRESOLVED_CONTINUATION:'未确定续接',
+      INFERRED_STRAIGHTEST_CANDIDATE:'自动直顺候选', AUTO_INFERRED_CONTINUATION:'多证据自动推断',
+      INFERRED_MULTI_CUE_CANDIDATE:'多证据候选，建议复核', UNRESOLVED_CONTINUATION:'未确定续接',
+      HIGH_GEOMETRIC:'高几何证据／未验证', REVIEW_RECOMMENDED:'建议人工核对',
       UNRESOLVED_AXIS_CONTINUATION:'根轴续接未决',
       SAMPLE_SUPPORTED_ESTIMATE:'采样支持估计', OBSERVED_AXIS_DESCRIPTOR:'已提取轴的几何分布',
       TRUE_ROOT_TIP_NOT_IDENTIFIED:'未确认真实根尖', NATURAL_AXIS_BASE_NOT_IDENTIFIED:'未确认自然根基',
@@ -306,7 +310,7 @@ export async function installPhenotyping({apiURL, report, graph, paths, scene, p
     $('#ph_units').textContent='所有长度、窗口、直径分界和参考点坐标均使用 '+unit()+'。'+(report.scale_mm_per_model_unit==null?'当前模型尚未给定毫米尺度。':'毫米尺度来自原测量报告。');
     $('#ph_binding').textContent='测量 SHA-256：'+measurementHash;
     const stats=$('#ph_stats');stats.replaceChildren();
-    const interpretable=(a.axes||[]).filter(axis=>['CANDIDATE','CONFIRMED'].includes(axis.confirmation_status)).length;
+    const interpretable=(a.axes||[]).filter(axis=>['CANDIDATE','CONFIRMED','AUTO_INFERRED'].includes(axis.confirmation_status)).length;
     for(const [label,value,note] of [['已提取轴长',format(d.total_axis_length)+' '+unit(),d.partial_axis?'仅当前提取部分':'完整性与精度另验'],
       ['合格半径覆盖',percent(d.sample_coverage?.qualified_radius_arc_fraction),'以已提取轴长为分母'],
       ['可解释根轴',interpretable?String(interpretable)+' 条':'待指定',statusLabel(a.status)+'；'+(a.axes?.length??0)+' 个几何分段']]) {
@@ -369,7 +373,7 @@ export async function installPhenotyping({apiURL, report, graph, paths, scene, p
       const row=add(box,'div',null,'ph-junction');add(row,'strong','分量 '+component.component_id+' · '+statusLabel(component.status));
       add(row,'p',component.node_count+' 个节点，'+component.edge_count+' 条边；'+(component.axis_ids?.length||0)+' 个当前几何分段。','ph-note');
       const confirmed=component.status==='ROOTED_CONFIRMED';
-      const eligible=['ROOTED_CANDIDATE','ROOTED_PARTIALLY_CONFIRMED','ROOTED_CONFIRMED'].includes(component.status);
+      const eligible=['ROOTED_CANDIDATE','ROOTED_PARTIALLY_CONFIRMED','ROOTED_CONFIRMED','ROOTED_AUTO_INFERRED','ROOTED_REVIEW_RECOMMENDED'].includes(component.status);
       button(row,confirmed?'撤回此分量确认':'已核对：确认此分量',()=>annotationEdit(()=>{
         const id=component.component_id;
         if(confirmed){annotations.confirmed_components=annotations.confirmed_components.filter(x=>x!==id);annotations.confirmed_axes=annotations.confirmed_axes.filter(x=>!component.axis_ids.includes(x));}
@@ -383,9 +387,9 @@ export async function installPhenotyping({apiURL, report, graph, paths, scene, p
     if(!decisions.length)add(box,'p','指定根基后，有多个后续分支的节点会列在这里。','ph-note');
     for(const decision of decisions.slice(0,150)) {
       const row=add(box,'div',null,'ph-junction');add(row,'strong','分叉节点 '+decision.node_id+' · '+statusLabel(decision.status));
-      add(row,'p','入边来自节点 '+decision.incoming_node_id+'；选择哪条出边继续属于同一条根。','ph-note');
+      add(row,'p','入边来自节点 '+decision.incoming_node_id+'；'+statusLabel(decision.confidence_tier)+'。自动结果由局部方向、合格半径连续性、下游长度和层级综合推断，不代表生物学验证。','ph-note');
       const select=add(row,'select');select.setAttribute('aria-label','节点 '+decision.node_id+' 的续接');
-      for(const [value,label] of [['auto','保留自动候选'],['stop','本根在此终止；子分支另起根轴'],...(decision.alternatives||[]).map(x=>[String(x.outgoing_node_id),'继续到节点 '+x.outgoing_node_id+'（直顺程度 '+format(x.alignment_cosine)+'）'])]){const option=add(select,'option',label);option.value=value;}
+      for(const [value,label] of [['auto','采用自动推断'],['stop','本根在此终止；子分支另起根轴'],...(decision.alternatives||[]).map(x=>[String(x.outgoing_node_id),'继续到节点 '+x.outgoing_node_id+'（综合分数 '+format(x.ranking_score)+'，方向 '+format(x.alignment_cosine)+'，径比 '+format(x.radius_ratio_to_mother)+'，下游长 '+format(x.downstream_max_path_length)+'）'])]){const option=add(select,'option',label);option.value=value;}
       const override=annotations.junction_continuations.find(x=>x.node_id===decision.node_id);
       select.value=override?(override.outgoing_node_id===null?'stop':String(override.outgoing_node_id)):'auto';
       const actions=add(row,'div',null,'ph-actions');

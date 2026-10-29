@@ -476,7 +476,7 @@ export async function installPhenotyping({apiURL, report, graph, paths, scene, p
     add(box,'p','显示与所选根轴有关的 '+rows.length+' 条关系。局部切线角与整根 PCA 角分别列出。','ph-note');
     table(box,[['母根 → 子根',r=>r.parent_axis_id.slice(-6)+' → '+r.child_axis_id.slice(-6)],
       ['附着弧长 / '+unit(),r=>format(r.attachment_arc)],['局部夹角',r=>format(r.local_insertion_angle_deg?.value)+'°'],
-      ['整根夹角',r=>format(r.whole_axis_pca_angle_deg?.value)+'°'],['母根直径 / '+unit(),r=>format(r.parent_diameter?.value)],
+      [result.architecture.analysis_regions?'片段 PCA 夹角':'整根夹角',r=>format(r.whole_axis_pca_angle_deg?.value)+'°'],['母根直径 / '+unit(),r=>format(r.parent_diameter?.value)],
       ['子根直径 / '+unit(),r=>format(r.child_diameter?.value)],['子/母直径',r=>format(r.child_parent_diameter_ratio?.value)],
       ['状态',r=>statusLabel(r.confirmation_status)]],rows);
     if(rows.length) {

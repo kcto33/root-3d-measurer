@@ -313,8 +313,12 @@ def morphology_csv(value, profile=False):
     records = value['depth_profile'] if profile else value['metrics']
     fields = ['depth_start', 'depth_end', 'axis_length', 'axis_length_fraction', 'solid_volume'] if profile else ['parameter', 'label', 'value', 'unit', 'status', 'covered_arc_fraction', 'definition']
     if profile:
-        records = [dict(r, unit=value['unit'], vertical_axis=value['settings']['vertical_axis'], down_sign=value['settings']['down_sign']) for r in records]
-        fields += ['unit', 'vertical_axis', 'down_sign']
+        records = [dict(r, unit=value['unit'], solid_volume_unit=value['unit']+'^3') for r in records]
+        fields += ['unit', 'solid_volume_unit']
+    metadata = dict(method=value['schema_version'], measurement_sha256=value.get('measurement',{}).get('sha256'),
+                    vertical_axis=value['settings']['vertical_axis'], down_sign=value['settings']['down_sign'])
+    records = [dict(r, **metadata) for r in records]
+    fields += list(metadata)
     out = io.StringIO(newline='')
     writer = csv.DictWriter(out, fieldnames=fields, lineterminator='\r\n')
     writer.writeheader(); writer.writerows(records)

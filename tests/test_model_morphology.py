@@ -149,6 +149,11 @@ def test_csv_has_units_status_and_default_orientation():
     result=build_morphology(report([],[]),solid=cuboid())
     assert b'fractal_dimension_3d' in morphology_csv(result)
     assert b'vertical_axis,down_sign' in morphology_csv(result,profile=True)
+    import csv,io
+    result['measurement']={'sha256':'bound-measurement-sha'}
+    row=next(csv.DictReader(io.StringIO(morphology_csv(result).decode('utf-8-sig'))))
+    assert row['method']=='root-morphology-v001' and row['measurement_sha256']=='bound-measurement-sha'
+    assert row['vertical_axis']=='z' and row['down_sign']=='-1'
 
 
 def test_depth_outside_bounds_is_separate_from_in_bounds_profile():

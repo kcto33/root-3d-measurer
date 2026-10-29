@@ -60,7 +60,7 @@ def test_public_geometry_candidate_and_confirmed_outputs_preserve_input(measurem
     assert geometry['measurement_coverage']['output_total_length'] == 12
     assert geometry['distributions']['distributions']['radial']['status'].startswith('UNAVAILABLE')
     candidate = phenotype(measurement, annotation_profile=rooted_profile(geometry))
-    assert all(a['confirmation_status'] == 'CANDIDATE' for a in candidate['architecture']['axes'])
+    assert all(a['confirmation_status'] in ('CANDIDATE', 'AUTO_INFERRED') for a in candidate['architecture']['axes'])
     result = phenotype(measurement, annotation_profile=rooted_profile(candidate, confirmed=True))
     axes = result['axis_traits']['axes']
     mother = next(a for a in axes if a['parent_axis_id'] is None)

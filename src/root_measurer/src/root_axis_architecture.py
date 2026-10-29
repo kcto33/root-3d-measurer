@@ -275,6 +275,8 @@ def build_axis_architecture(graph, *, annotations=None, scale_mm_per_model_unit=
                     alternatives.append(dict(outgoing_node_id=child, alignment_cosine=score))
                 confidence, evidence = 'NOT_ASSESSED', []
             if node in overrides:
+                if multi_cue:
+                    row['review_recommended_junction_node_ids'].append(node)
                 annotated_in, selected = overrides[node]
                 if annotated_in != incoming or (selected is not None and selected not in child_nodes):
                     raise ValueError('CONTINUATION_CONFLICTS_WITH_ROOTED_DIRECTION')

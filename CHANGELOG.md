@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.0 — 2026-10-29
+
+- Added 17 original-solid/centerline morphology descriptors and exact segment/cube depth profiles, with configurable vertical axis/downward sign (default Z negative).
+- Added continuous-segment 3D finite-scale box counting over a fixed scale range and eight grid phases; retained counts, R², grid phase slopes and unavailable states.
+- Added result-page orientation controls and morphology/depth-profile exports, parameter integration, batch summary columns and an additive `morphology` CLI/Python API for SHA-bound historical measurements.
+- Kept partial-axis, mesh-volume, missing-scale and biological interpretation limits explicit. Axis extraction, length, radius and accuracy acceptance algorithms are unchanged.
+
 ## 0.1.0 — 2026-10-29
 
 - Extracted the actual dependency closure of the existing measurer into an installable standalone tool.

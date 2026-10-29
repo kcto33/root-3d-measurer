@@ -1,0 +1,7 @@
+{
+  "vertical_axis": "z",
+  "down_sign": -1,
+  "depth_bins": 10,
+  "minimum_scales": 4,
+  "box_visit_budget": 2000000
+}

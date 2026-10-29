@@ -2,7 +2,7 @@
 
 在本机输入三维根系实体，输出唯一中心线总长、分支路径长度、沿线截面等效半径/直径、体积、边界面积和包围盒。浏览器中可点选端点分支、在同一分支选择两点、描绘有序相连根段，以及在连续轴位置现场查询原实体截面。
 
-本仓库是独立迭代的工具。运行不需要原研究项目、历史实验目录、数据集、GPU、云账户或外部网络服务。首版为 `0.1.0`，既有数值内核保留可追溯来源；便携运行层和公共 API 单独维护。
+本仓库是独立迭代的工具。运行不需要原研究项目、历史实验目录、数据集、GPU、云账户或外部网络服务。当前版本为 `0.2.0`，既有数值内核保留可追溯来源；便携运行层和公共 API 单独维护。
 
 ## 安装
 
@@ -54,6 +54,20 @@ root-measurer batch runs/inputs.json --workspace runs/batch_workspace
 ```
 
 工作台也支持每行一个原生实体路径。按顺序执行，保留失败/取消项及完整分母，生成 `batch_summary.json` 和 `batch_summary.csv`。批量入口目前针对原生实体。
+
+## 植物形态指标
+
+新增17项几何形态指标：三维中心线有限尺度盒计数维数、深度、最大水平展幅、展深比、凸包体积、体积充实度、水平材料投影面积／凸包面积／充实度、凸包内根长密度、几何分叉密度、路径曲折度、竖直夹角、面积体积比、球形度、根长深度D50／D95；另提供10层根长和原实体体积深度分布。
+
+默认 **Z轴竖直、负方向向下**。工作台、结果页、单模型和批量命令均可切换。深度零点为实体最上边界，未假定土壤表面。分形维数显示所有固定二倍尺度、8种网格偏移计数、拟合R²及适用状态；尺度不足不输出数值。形态描述与独立精度验收分开。定义、单位和限制见 [形态指标](docs/morphology.md)。
+
+```powershell
+root-measurer measure runs/demo_inputs/straight --workspace runs/demo_workspace --vertical-axis z --down-sign -1
+# 对已有测量增量分析；不重新提取轴、不改写历史文件，输出前缀必须未使用。
+root-measurer morphology runs/demo_workspace/results/model_delivery_local/run001/model_measurement.json --output runs/demo_workspace/analysis/straight_z_down --vertical-axis z --down-sign -1
+```
+
+Python：`from root_measurer import morphology`，再调用 `morphology(measurement_path, vertical_axis="z", down_sign=-1)`。原参数JSON/CSV记录测量时方向；结果页的“形态指标CSV／完整JSON／深度分布CSV”使用当前页面所选方向。批量汇总增加主要形态列、单位、方向和每项资格状态。
 
 ## 交互和 Python API
 

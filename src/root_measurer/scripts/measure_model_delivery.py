@@ -112,6 +112,8 @@ def main(argv=None):
     ap.add_argument('--mesh-target-reason',default='',help='input geometry/feature-scale basis, no GT parameters')
     ap.add_argument('--mesh-resume-target-from',type=Path,help='explicit diagnostic target checkpoint reuse; never called fresh')
     ap.add_argument('--scale-mm',type=float)
+    ap.add_argument('--vertical-axis',choices=['x','y','z'],default='z')
+    ap.add_argument('--down-sign',type=int,choices=[-1,1],default=-1)
     ap.add_argument('--inherit-from',type=Path,help='M1 only: SHA-bound prior body/radius witness; reported as inherited')
     ap.add_argument('--resume-axis-from',type=Path,help='Reuse a bound prior automatic native axis and remeasure final sections')
     ap.add_argument('--native-backend',choices=['auto','existing_span','existing_guarded_lee'],default='auto')

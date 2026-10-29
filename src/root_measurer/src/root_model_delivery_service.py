@@ -11,7 +11,7 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit,parse_qs
 
 from root_model_delivery_exports import file_reference,write_json
 from root_model_delivery_validation import validation_for
@@ -29,6 +29,7 @@ def serve_workspace(experiment,port=0,open_browser=False,input_paths=()):
     token=secrets.token_hex(24)
     entities={};jobs={};batches={};lock=threading.Lock()
     interaction_cache={};interaction_lock=threading.Lock()
+    morphology_cache={};morphology_lock=threading.Lock()
     def register_entity(path):
         path=Path(path).resolve()
         if path.is_dir():path=path/'entity_prediction.json'
@@ -137,6 +138,7 @@ def serve_workspace(experiment,port=0,open_browser=False,input_paths=()):
             if path=='/':return self.send_file(PROJECT/'src/model_delivery_workspace.html','text/html; charset=utf-8',replace_token=True)
             if path=='/model_delivery_viewer.js':return self.send_file(PROJECT/'src/model_delivery_viewer.js','text/javascript; charset=utf-8')
             if path=='/model_delivery_interaction.js':return self.send_file(PROJECT/'src/model_delivery_interaction.js','text/javascript; charset=utf-8')
+            if path=='/model_delivery_morphology.js':return self.send_file(PROJECT/'src/model_delivery_morphology.js','text/javascript; charset=utf-8')
             if path=='/api/interaction-session':return self.json_response(dict(token=token))
             if path=='/api/state':
                 records=deliveries()
@@ -151,6 +153,38 @@ def serve_workspace(experiment,port=0,open_browser=False,input_paths=()):
             match=re.fullmatch(r'/result/([a-f0-9]{16})/(.*)',path)
             if match:
                 record=deliveries().get(match[1])
+                if record and match[2] in ['morphology.json','export/morphology','export/morphology_json','export/depth_profile']:
+                    try:
+                        from root_measurer.api import morphology
+                        from root_model_morphology import settings,morphology_csv
+                        measured=result_routes(record)['measurement.json'][0]
+                        query=parse_qs(urlsplit(self.path).query)
+                        params=json.loads(record['path'].with_name(record['path'].name.removesuffix('_delivery.json')+'_parameters.json').read_text(encoding='utf-8'))
+                        defaults=params.get('morphology',{}).get('settings',{})
+                        options=dict(vertical_axis=query.get('vertical_axis',[defaults.get('vertical_axis','z')])[0],
+                                     down_sign=int(query.get('down_sign',[defaults.get('down_sign',-1)])[0]))
+                        settings(options)
+                        key=(file_reference(measured)['sha256'],options['vertical_axis'],options['down_sign'])
+                        with morphology_lock:
+                            if key not in morphology_cache:
+                                if len(morphology_cache)>=6:morphology_cache.clear()
+                                morphology_cache[key]=morphology(measured,**options)
+                            value=morphology_cache[key]
+                            binding=value.get('source_binding') or {}
+                            if binding.get('metadata'):
+                                from root_native_entity_measurement import check_entity_unchanged
+                                check_entity_unchanged(binding)
+                            elif binding.get('path'):
+                                actual=file_reference(binding['path'])
+                                if any(actual[k]!=binding[k] for k in ['sha256','bytes']):raise ValueError('ORIGINAL_MESH_CHANGED')
+                        if match[2]=='morphology.json':return self.json_response(value)
+                        is_json=match[2]=='export/morphology_json'
+                        raw=json.dumps(value,ensure_ascii=False,allow_nan=False,indent=2).encode('utf-8') if is_json else morphology_csv(value,profile=match[2]=='export/depth_profile')
+                        self.send_response(200);self.send_header('Content-Type','application/json' if is_json else 'text/csv; charset=utf-8')
+                        self.send_header('Content-Length',str(len(raw)));self.send_header('Cache-Control','no-store')
+                        self.send_header('Content-Disposition','attachment; filename="'+match[2].split('/')[-1]+('_'+options['vertical_axis']+str(options['down_sign']))+('.json' if is_json else '.csv')+'"')
+                        self.end_headers();self.wfile.write(raw);return
+                    except (ValueError,OSError,KeyError) as exc:return self.json_response(dict(error=str(exc)),409)
                 if record and match[2]=='connected_validation.json':
                     prefix=record['path'].with_name(record['path'].name[:-len('_delivery.json')])
                     try:
@@ -262,7 +296,10 @@ def serve_workspace(experiment,port=0,open_browser=False,input_paths=()):
                         with (experiment/'EXPERIMENT_LOG.md').open('a',encoding='utf-8') as f:
                             f.write('\n'+time.strftime('%Y-%m-%d')+' PRELOG UI batch: '+manifest.relative_to(experiment).as_posix()+' inputs; '+folder.relative_to(experiment).as_posix()+' outputs; cancellation marker in snapshot/batch_requests; results/model_delivery_local/workspace_batch_'+key+'.log records launcher.\n')
                         write_json(manifest,dict(inputs=sources))
-                        cmd=[sys.executable,'-B',str(PROJECT/'scripts/measure_model_batch.py'),'--manifest',str(manifest),'--output-dir',str(folder),'--cancel-file',str(cancel)]
+                        from root_model_morphology import settings
+                        orientation=settings({k:data[k] for k in ['vertical_axis','down_sign'] if k in data})
+                        cmd=[sys.executable,'-B',str(PROJECT/'scripts/measure_model_batch.py'),'--manifest',str(manifest),'--output-dir',str(folder),'--cancel-file',str(cancel),
+                             '--vertical-axis',orientation['vertical_axis'],'--down-sign',str(orientation['down_sign'])]
                         if scale is not None:cmd+=['--scale-mm',str(float(scale))]
                         with (base/('workspace_batch_'+key+'.log')).open('x',encoding='utf-8') as log:
                             process=subprocess.Popen(cmd,stdout=log,stderr=subprocess.STDOUT,
@@ -274,6 +311,8 @@ def serve_workspace(experiment,port=0,open_browser=False,input_paths=()):
                         if any(j['process'].poll() is None for j in [*jobs.values(),*batches.values()]):
                             raise ValueError('ONE_LOCAL_MEASUREMENT_AT_A_TIME')
                         entity=entities[data['entity_id']]
+                        from root_model_morphology import settings
+                        orientation=settings({k:data[k] for k in ['vertical_axis','down_sign'] if k in data})
                         scale=data.get('scale_mm')
                         if scale is not None and (isinstance(scale,bool) or not math.isfinite(float(scale)) or float(scale)<=0):
                             raise ValueError('POSITIVE_MM_SCALE_REQUIRED')
@@ -288,7 +327,8 @@ def serve_workspace(experiment,port=0,open_browser=False,input_paths=()):
                         prefix=folder/(name+'_fresh');cancel=folder/'cancel.json'
                         cmd=[sys.executable,'-B',str(PROJECT/'scripts/measure_model_delivery.py'),
                              '--mesh' if entity.get('input_kind')=='triangle_ply' else '--entity',entity['path'],'--output-prefix',str(prefix),
-                             '--native-backend','auto','--cancel-file',str(cancel)]
+                             '--native-backend','auto','--cancel-file',str(cancel),
+                             '--vertical-axis',orientation['vertical_axis'],'--down-sign',str(orientation['down_sign'])]
                         if entity.get('input_kind')=='triangle_ply':
                             cmd+=['--mesh-workflow','--mesh-target-reason',reason]
                             if target is not None:cmd+=['--mesh-target-pitch',str(float(target))]

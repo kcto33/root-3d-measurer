@@ -30,7 +30,8 @@ def initialize_workspace(folder):
         if any(root.iterdir()):
             raise ValueError("USE_EMPTY_FOLDER_OR_EXISTING_MEASURER_WORKSPACE")
         with marker.open("x", encoding="utf-8") as stream:
-            json.dump({"schema": "root-measurer-workspace-v001", "version": "0.1.0"}, stream)
+            from . import __version__
+            json.dump({"schema": "root-measurer-workspace-v001", "version": __version__}, stream)
     for relative in ["results/model_delivery_local", "analysis", "snapshot"]:
         (root / relative).mkdir(parents=True, exist_ok=True)
     log = root / "EXPERIMENT_LOG.md"

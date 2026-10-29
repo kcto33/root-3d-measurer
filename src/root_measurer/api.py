@@ -33,7 +33,10 @@ class Measurement:
 
 
 def measure(model, *, workspace="runs/default", scale_mm=None, max_memory_mb=8192,
-            mesh_target_pitch=None, mesh_target_reason=""):
+            mesh_target_pitch=None, mesh_target_reason="", vertical_axis="z", down_sign=-1):
+    activate()
+    from root_model_morphology import settings
+    settings(dict(vertical_axis=vertical_axis, down_sign=down_sign))
     source = Path(model).expanduser().resolve()
     if source.is_dir():
         source /= "entity_prediction.json"
@@ -46,7 +49,7 @@ def measure(model, *, workspace="runs/default", scale_mm=None, max_memory_mb=819
     mesh = source.suffix.lower() == ".ply"
     args = [sys.executable, "-B", str(script("measure_model_delivery.py")),
             "--mesh" if mesh else "--entity", str(source), "--output-prefix", str(prefix),
-            "--max-memory-mb", str(max_memory_mb)]
+            "--max-memory-mb", str(max_memory_mb), "--vertical-axis", vertical_axis, "--down-sign", str(down_sign)]
     if scale_mm is not None:
         args += ["--scale-mm", str(scale_mm)]
     if mesh:
@@ -84,3 +87,42 @@ def query_radius(measurement, path_id, arc, *, normal=None):
     result = _interaction(measurement).radius(request)
     from root_model_delivery_exports import file_reference
     return dict(result, measurement=file_reference(measurement))
+
+
+def morphology(measurement, *, vertical_axis="z", down_sign=-1):
+    """Additive analysis: verify bound original input; never rewrite measurements."""
+    activate()
+    from root_model_morphology import build_morphology, settings
+    from root_model_delivery_exports import file_reference
+    from root_native_entity_measurement import load_entity, check_entity_unchanged
+    options = dict(vertical_axis=vertical_axis, down_sign=down_sign)
+    settings(options)
+    measured = Path(measurement).resolve()
+    before = file_reference(measured)
+    report = json.loads(measured.read_text(encoding="utf-8"))
+    solid = mesh = None
+    geometry = {}
+    if report.get("entity_binding"):
+        binding = report["entity_binding"]
+        check_entity_unchanged(binding)
+        solid, actual, _ = load_entity(binding["metadata"]["path"], stage=binding["stage"])
+        if actual["cells_sha256"] != binding["cells_sha256"]:
+            raise ValueError("ORIGINAL_ENTITY_CHANGED")
+        from root_reconstruction_measurement import boundary_faces
+        geometry["surface_area"] = len(boundary_faces(solid)[0])*solid.pitch**2
+    elif report.get("input_file_binding"):
+        from root_triangle_measurement_input import read_triangle_ply_bytes
+        binding = report["input_file_binding"]
+        source = Path(binding["path"])
+        actual = file_reference(source)
+        if any(actual[k] != binding[k] for k in ("sha256", "bytes")):
+            raise ValueError("ORIGINAL_MESH_CHANGED")
+        mesh = read_triangle_ply_bytes(source.read_bytes())
+    value = build_morphology(report, solid=solid, mesh=mesh, options=options, geometry=geometry)
+    if report.get("entity_binding"):
+        check_entity_unchanged(report["entity_binding"])
+    elif mesh is not None and file_reference(source) != actual:
+        raise ValueError("ORIGINAL_MESH_CHANGED")
+    if file_reference(measured) != before:
+        raise ValueError("MEASUREMENT_CHANGED")
+    return dict(value, measurement=before, source_binding=report.get("entity_binding") or report.get("input_file_binding"))

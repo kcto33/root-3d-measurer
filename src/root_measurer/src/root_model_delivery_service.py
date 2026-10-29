@@ -30,6 +30,7 @@ def serve_workspace(experiment,port=0,open_browser=False,input_paths=()):
     entities={};jobs={};batches={};lock=threading.Lock()
     interaction_cache={};interaction_lock=threading.Lock()
     morphology_cache={};morphology_lock=threading.Lock()
+    phenotyping_lock=threading.Lock()
     def register_entity(path):
         path=Path(path).resolve()
         if path.is_dir():path=path/'entity_prediction.json'
@@ -139,6 +140,7 @@ def serve_workspace(experiment,port=0,open_browser=False,input_paths=()):
             if path=='/model_delivery_viewer.js':return self.send_file(PROJECT/'src/model_delivery_viewer.js','text/javascript; charset=utf-8')
             if path=='/model_delivery_interaction.js':return self.send_file(PROJECT/'src/model_delivery_interaction.js','text/javascript; charset=utf-8')
             if path=='/model_delivery_morphology.js':return self.send_file(PROJECT/'src/model_delivery_morphology.js','text/javascript; charset=utf-8')
+            if path=='/model_delivery_phenotyping.js':return self.send_file(PROJECT/'src/model_delivery_phenotyping.js','text/javascript; charset=utf-8')
             if path=='/api/interaction-session':return self.json_response(dict(token=token))
             if path=='/api/state':
                 records=deliveries()
@@ -153,6 +155,21 @@ def serve_workspace(experiment,port=0,open_browser=False,input_paths=()):
             match=re.fullmatch(r'/result/([a-f0-9]{16})/(.*)',path)
             if match:
                 record=deliveries().get(match[1])
+                if record and match[2]=='phenotyping.json':
+                    try:
+                        from root_measurer.api import phenotype
+                        from root_model_phenotyping import latest_annotation_profile
+                        measured=result_routes(record)['measurement.json'][0]
+                        profile=latest_annotation_profile(measured)
+                        # First analysis inherits the measurement's declared vertical direction.
+                        params_path=record['path'].with_name(record['path'].name.removesuffix('_delivery.json')+'_parameters.json')
+                        defaults={}
+                        if profile is None and params_path.is_file():
+                            declared=json.loads(params_path.read_text(encoding='utf-8')).get('morphology',{}).get('settings',{})
+                            defaults={k:declared[k] for k in ('vertical_axis','down_sign') if k in declared}
+                        return self.json_response(phenotype(measured,options=defaults,annotation_profile=profile))
+                    except (ValueError,OSError,KeyError,TypeError) as exc:
+                        return self.json_response(dict(error=str(exc)),409)
                 if record and match[2] in ['morphology.json','export/morphology','export/morphology_json','export/depth_profile']:
                     try:
                         from root_measurer.api import morphology
@@ -227,10 +244,41 @@ def serve_workspace(experiment,port=0,open_browser=False,input_paths=()):
         def do_POST(self):
             if self.headers.get('X-Root-Local-Token')!=token:
                 return self.json_response(dict(error='LOCAL_SESSION_TOKEN_REQUIRED'),403)
-            length=int(self.headers.get('Content-Length','0'))
-            if not 0<=length<=65536:return self.json_response(dict(error='REQUEST_SIZE'),400)
             try:
+                phenotype_route=re.fullmatch(r'/result/([a-f0-9]{16})/phenotyping',self.path)
+                length=int(self.headers.get('Content-Length','0'))
+                limit=8*1024*1024 if phenotype_route else 65536
+                if not 0<=length<=limit:return self.json_response(dict(error='REQUEST_SIZE'),400)
                 data=json.loads(self.rfile.read(length) or b'{}')
+                if phenotype_route:
+                    from root_measurer.api import phenotype
+                    from root_model_phenotyping import export_phenotyping,phenotyping_csv
+                    if not isinstance(data,dict) or set(data)-{'action','options','annotation_profile','kind'}:
+                        raise ValueError('INVALID_PHENOTYPE_REQUEST')
+                    record=deliveries().get(phenotype_route[1])
+                    if record is None:raise ValueError('RESULT_NOT_FOUND')
+                    action=data.get('action','analyze')
+                    if action not in ('analyze','save','export'):raise ValueError('UNKNOWN_PHENOTYPE_ACTION')
+                    measured=result_routes(record)['measurement.json'][0]
+                    with phenotyping_lock:
+                        value=phenotype(measured,options=data.get('options'),annotation_profile=data.get('annotation_profile'))
+                        if action=='save':
+                            folder=measured.parent/'phenotyping';folder.mkdir(exist_ok=True)
+                            number=1
+                            while True:
+                                output=folder/f'run{number:05d}'
+                                try:output.mkdir();break
+                                except FileExistsError:number+=1
+                            files=export_phenotyping(value,output/'analysis')
+                            value['saved_files']={k:file_reference(p,experiment) for k,p in files.items()}
+                        elif action=='export':
+                            kind=data.get('kind','distributions')
+                            raw=phenotyping_csv(value,kind)
+                            self.send_response(200);self.send_header('Content-Type','text/csv; charset=utf-8')
+                            self.send_header('Content-Length',str(len(raw)));self.send_header('Cache-Control','no-store')
+                            self.send_header('Content-Disposition','attachment; filename="root_'+kind+'.csv"')
+                            self.end_headers();self.wfile.write(raw);return
+                    return self.json_response(value)
                 interaction=re.fullmatch(r'/result/([a-f0-9]{16})/interact',self.path)
                 if interaction:
                     from root_model_interaction import ModelInteraction
@@ -347,7 +395,7 @@ def serve_workspace(experiment,port=0,open_browser=False,input_paths=()):
                         write_json(job['cancel'],dict(reason='USER_CANCELLED_FROM_LOCAL_WORKSPACE'))
                     return self.json_response(dict(cancel_requested=True))
                 self.send_error(404)
-            except (ValueError,KeyError,RuntimeError,OSError) as exc:
+            except (ValueError,KeyError,RuntimeError,OSError,TypeError) as exc:
                 self.json_response(dict(error=str(exc)),400)
         def log_message(self,*_):pass
     server=ThreadingHTTPServer(('127.0.0.1',port),Handler)

@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 from . import __version__
-from .api import MeasurementError, measure, query_length, query_radius, morphology
+from .api import MeasurementError, measure, query_length, query_radius, morphology, phenotype
 from .runtime import activate, initialize_workspace, script
 
 
@@ -55,6 +55,22 @@ def parser():
     for command in (one, batch, morph):
         command.add_argument("--vertical-axis", choices=["x", "y", "z"], default="z")
         command.add_argument("--down-sign", type=int, choices=[-1, 1], default=-1)
+    traits = commands.add_parser("phenotype", help="直径/空间分布与可人工确认的根轴性状；另存分析")
+    traits.add_argument("measurement", type=Path)
+    traits.add_argument("--output", type=Path, required=True, help="未使用的新输出前缀")
+    traits.add_argument("--annotations", type=Path, help="与测量SHA绑定的标注JSON")
+    traits.add_argument("--settings", type=Path, help="可选的分析设置JSON对象")
+    traits.add_argument("--root-base", type=int, action="append", help="现有图节点ID；每个树分量一个根基")
+    traits.add_argument("--confirm-component", type=int, action="append", help="显式确认已检查的分量根轴身份")
+    traits.add_argument("--vertical-axis", choices=["x", "y", "z"])
+    traits.add_argument("--down-sign", type=int, choices=[-1, 1])
+    traits.add_argument("--diameter-thresholds", dest="diameter_edges", type=float, nargs="+")
+    traits.add_argument("--depth-bins", type=int)
+    traits.add_argument("--origin", type=float, nargs=3, help="径向/位置方位分布原点，使用输出长度单位")
+    traits.add_argument("--radial-thresholds", dest="radial_edges", type=float, nargs="+")
+    traits.add_argument("--tangent-window", type=float)
+    traits.add_argument("--diameter-offset", type=float)
+    traits.add_argument("--diameter-window", type=float)
     return ap
 
 
@@ -97,6 +113,35 @@ def main(argv=None):
                 with target.open("xb") as stream:
                     stream.write(raw)
             print(json.dumps({"files": [str(p) for p in targets]}, ensure_ascii=False))
+        elif args.command == "phenotype":
+            from root_model_delivery_exports import file_reference
+            from root_model_phenotyping import ANNOTATION_SCHEMA, export_phenotyping
+            profile = json.loads(args.annotations.read_text(encoding="utf-8-sig")) if args.annotations else None
+            if args.root_base is not None or args.confirm_component is not None:
+                if profile is None:
+                    profile = {"schema_version": ANNOTATION_SCHEMA,
+                        "measurement_sha256": file_reference(args.measurement)["sha256"],
+                        "annotations": {"schema_version": "root-axis-annotations-v001"}}
+                annotations = profile["annotations"]
+                if args.root_base is not None:
+                    annotations["root_bases"] = [{"node_id": n} for n in args.root_base]
+                    annotations["endpoint_types"] = [e for e in annotations.get("endpoint_types", [])
+                        if e["type"] != "root_base" and e["node_id"] not in args.root_base]
+                    for key in ("confirmed_axes", "confirmed_components", "root_types", "junction_continuations"):
+                        annotations.pop(key, None)
+                if args.confirm_component is not None:
+                    annotations["confirmed_components"] = args.confirm_component
+            options = json.loads(args.settings.read_text(encoding="utf-8-sig")) if args.settings else {}
+            if not isinstance(options, dict):
+                raise ValueError("PHENOTYPE_SETTINGS_OBJECT_REQUIRED")
+            for key in ("vertical_axis", "down_sign", "diameter_edges", "depth_bins", "origin",
+                        "radial_edges", "tangent_window", "diameter_offset", "diameter_window"):
+                if getattr(args, key) is not None:
+                    options[key] = getattr(args, key)
+            value = phenotype(args.measurement, options=options, annotation_profile=profile)
+            files = export_phenotyping(value, args.output)
+            print(json.dumps({"files": files, "architecture_status": value["architecture"]["status"],
+                              "partial_axis": value["partial_axis"]}, ensure_ascii=False))
         elif args.command == "demo":
             from build_native_measurement_acceptance import build
             print(json.dumps(build(args.case, args.output.resolve()), ensure_ascii=False))
@@ -118,6 +163,6 @@ def main(argv=None):
             write_json(sidecar, dict(measurement=file_reference(measured), score=file_reference(output),
                 radius_quantity=value["radius_quantity"], precision_pass=value["precision_pass"], metrics=value["metrics"]))
         return 0
-    except (MeasurementError, ValueError, OSError, KeyError) as exc:
+    except (MeasurementError, ValueError, OSError, KeyError, TypeError) as exc:
         print(str(exc), file=sys.stderr)
         return 1

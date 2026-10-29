@@ -1,0 +1,92 @@
+{
+  "schema_version": "native-model-delivery-config-v001",
+  "primary_input": "entity_prediction.json and SHA-bound native NPZ",
+  "entity_stage": "regularized_negative_indices",
+  "new_cloud_allocation": false,
+  "initial_worker_memory_mb": 8192,
+  "native_backend": "auto",
+  "compiled_lee_axis_order": [
+    0,
+    1,
+    2
+  ],
+  "compiled_lee_endpoint_candidate_axis_order": [
+    1,
+    2,
+    0
+  ],
+  "compiled_lee_axis_order_policy": "keep complete original012 endpoint estimates; on actual unresolved endpoints try one fixed120 candidate with all endpoints qualified, same input/topology/graph-count signature; no GT selection",
+  "small_dense_span_cells": 1000000,
+  "sparse_thinning_is_conditional": true,
+  "native_graph_policy": "native_cube_h1_quotient_junction_ports_v002",
+  "unsupported_legacy_graph_fallback": "filled triangle cycle-space quotient; preserve true H1, components, unfilled edges and terminal ports; H2 stays blocked",
+  "native_worker_network": "deny socket connect/sendto and DNS; no system network change",
+  "native_pitch_policy": "preserve input pitch, origin and occupancy",
+  "radius_definition": "legacy single-branch disk area radius; separate connected_section fields retain mixed/holed material areas",
+  "sampling": "final graph edge midpoint",
+  "maximum_final_edge_length_native_pitches": 1,
+  "tangent_window_native_pitches": 10,
+  "tangent_numeric_zero_epsilon_multiplier": 64,
+  "geometric_endpoint_trace": {
+    "maximum_step_native_pitches": 1,
+    "minimum_step_native_pitches": 0.0625,
+    "maximum_steps": 256,
+    "short_refused_section_boundary_exit_max_pitches": 4,
+    "interior_retry_minimum_branch_pitches": 12,
+    "interior_retry_anchor_pitches": [
+      3,
+      8
+    ],
+    "interior_retry_maximum_branch_fraction": 0.25,
+    "short_boundary_branch_max_native_pitches": 12,
+    "short_boundary_central_exit_max_native_pitches": 2,
+    "short_boundary_challenge_exit_max_native_pitches": 4,
+    "short_boundary_challenge_angle_degrees": 10,
+    "short_boundary_spread_max_native_pitches": 1,
+    "short_boundary_owner_witnesses_per_ray": 11,
+    "short_boundary_does_not_qualify_radius_or_physical_tip": true,
+    "source_disk_branch_purity_required": true,
+    "physical_tip_claim": false
+  },
+  "junction_correction": {
+    "method": "source_owned_port_line_intersection_v001",
+    "fixed_queries_per_port": 12,
+    "port_window_pitches": [
+      3,
+      20
+    ],
+    "maximum_port_fraction": 0.4,
+    "minimum_valid_centroids": 3,
+    "minimum_centroid_span_pitches": 2,
+    "maximum_line_rms_pitches": 0.5,
+    "maximum_intersection_residual_pitches": 1,
+    "maximum_displacement_pitches": 4,
+    "maximum_displacement_minimum_branch_fraction": 0.25,
+    "all_changed_segments_source_supported": true,
+    "short_links_never_merged": true
+  },
+  "reference_scoring": {
+    "engine": "native_plane_geos_owned_v003",
+    "reference_dependency": "Shapely 2.1.2; project-local reference-only runtime",
+    "finite_input_reference_topology_compatibility_required": true,
+    "unqualified_correspondence_coverage_is_null": true,
+    "reference_bin_max_step_native_pitches": 2,
+    "axis_distance_tolerance": "max(sqrt(3)*native_pitch, .25*construction_local_radius)",
+    "tangent_angle_degrees": 45,
+    "minimum_reference_radius_scorable_fraction": 0.9,
+    "queries_depend_on_predicted_radius_success": false,
+    "same_plane_error_reported_separately": true
+  },
+  "complete_length_requires_resolved_endpoints": true,
+  "acceptance": {
+    "total_length_relative_error": 0.03,
+    "per_reference_path_relative_error": 0.05,
+    "C_axis_ref": 0.95,
+    "end_to_end_radius_relative_error": 0.05,
+    "C_radius_ref": 0.9,
+    "known_geometry_V_radius_out": 0.9,
+    "reconstruction_V_radius_out": 0.8
+  },
+  "connected_radius_definition": "sqrt(entire original connected material section area/pi), holes deducted; ambiguous contacts unqualified",
+  "portable_user_workspace": true
+}

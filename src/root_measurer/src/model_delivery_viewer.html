@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>根系实体测量器</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#101820;color:#e7eff3;font:14px system-ui}header{padding:18px 24px;border-bottom:1px solid #344650}h1{font-size:22px;margin:0 0 8px}h2{font-size:16px;margin:0 0 12px}.muted,small{color:#a9bdc8}main{display:grid;grid-template-columns:minmax(420px,1fr) 350px;gap:14px;padding:14px}.card{background:#182630;border:1px solid #354b59;border-radius:8px;padding:14px;margin-bottom:12px}#scene{width:100%;height:65vh;min-height:420px;background:#0d1921;touch-action:none}canvas{display:block}#chart{width:100%;height:190px}#stats{display:flex;gap:22px;flex-wrap:wrap}.stat{font-size:23px}.stat small{font-size:12px;display:block}button,select,a.action{background:#254251;border:1px solid #52788b;border-radius:5px;color:#f2f7fa;padding:7px;cursor:pointer;text-decoration:none}select{width:100%;margin:10px 0}label{display:inline-block;margin:7px 12px 7px 0}#detail{font:12px ui-monospace;white-space:pre-wrap;max-height:280px;overflow:auto}#issues{max-height:260px;overflow:auto}.issue{display:block;font-size:11px;width:100%;margin:6px 0;text-align:left;color:#ffb7ad}.downloads{display:flex;gap:8px;flex-wrap:wrap}footer{padding:0 25px 20px}.good{color:#7be0b8}.warn{color:#ffc278}input[type=range]{width:120px;vertical-align:middle}@media(max-width:850px){main{display:block}#scene{height:55vh}}
+</style></head><body>
+<header><h1>根系实体测量器</h1><div id="binding" class="muted">正在读取完整实体与测量结果…</div></header>
+<main><section><div class="card" id="stats"></div>
+<div class="card"><div><label><input id="surface" type="checkbox" checked>原实体边界</label><label><input id="axis" type="checkbox" checked>中心线</label><label><input id="missing" type="checkbox" checked>缺失标记</label><label>透明度 <input id="opacity" type="range" min="0" max="1" step=".02" value=".22"></label><button id="reset">复位视角</button></div><canvas id="scene"></canvas><small id="surface_note">拖动旋转，滚轮缩放。边界按实体原坐标显示；显示用 float32 不改变测量数据。</small></div>
+<div class="card"><h2>路径与沿线半径</h2><select id="path"></select><canvas id="chart"></canvas><small>仅显示实测样本；红色标记为缺失。输出有效率按弧长加权，参考覆盖率另列。</small></div></section>
+<aside><div class="card"><h2>导出同一份测量结果</h2><div id="downloads" class="downloads"></div></div>
+<div class="card" id="parameter_card" hidden><h2>模型参数</h2><div id="parameters"></div><p class="muted">半径统计仅覆盖有效实测弧段；实体体积与面积直接来自输入模型。完整长度与精度状态分别显示。</p></div>
+<div class="card"><h2>选中路径 / 采样位置</h2><pre id="detail">选择路径或点击半径图中的采样点。</pre></div>
+<div class="card"><h2>结果来源与验收</h2><div id="acceptance"></div></div>
+<div class="card"><h2>缺失与未解决项</h2><div id="issue_count"></div><div id="issues"></div></div></aside></main>
+<footer class="muted">几何量与物理/生物表型资格分别处理。参考覆盖率未验证时显示“未评分”。继承结果不代表新入口重新测量通过。</footer>
+<script src="/model_delivery_viewer.js"></script></body></html>

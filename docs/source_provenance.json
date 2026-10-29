@@ -1,0 +1,510 @@
+{
+  "upstream": "kcto33/root-2dgs-skeleton-phenotyping",
+  "extracted": "2026-10-29",
+  "files": [
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/scripts/build_native_measurement_acceptance.py",
+      "destination": "src/root_measurer/scripts/build_native_measurement_acceptance.py",
+      "sha256": "acda6f14acced03c547b3feb29b6b5aa9ed6bcb94b1727610ac4a3caa9ea7e02",
+      "bytes": 12061
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/scripts/measure_automatic_model.py",
+      "destination": "src/root_measurer/scripts/measure_automatic_model.py",
+      "sha256": "1a6331c153c0185a7c7b6a0f461ceea28adc1443e002f50fd29c7a36c779838e",
+      "bytes": 4098
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/scripts/measure_centerline_body.py",
+      "destination": "src/root_measurer/scripts/measure_centerline_body.py",
+      "sha256": "9d434ae1c59d2130e926324af67ff7e7479b8c504004153f75bfa6d2189626fa",
+      "bytes": 6605
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/scripts/measure_model_batch.py",
+      "destination": "src/root_measurer/scripts/measure_model_batch.py",
+      "sha256": "9fd14ad6f29daf571059f99af4f2a2493b56f394dd9a1fd162c8763a83b5fb7a",
+      "bytes": 4837
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/scripts/measure_model_delivery.py",
+      "destination": "src/root_measurer/scripts/measure_model_delivery.py",
+      "sha256": "e20e6340b46dd06dd63c677de9e8c46cf8c5cde801056402d6242ac804c32fdc",
+      "bytes": 12505
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/scripts/register_native_delivery_score.py",
+      "destination": "src/root_measurer/scripts/register_native_delivery_score.py",
+      "sha256": "c36c8f33bc7d4957416af69d10f7fa150681f8a0adc85b23bda86602c588ee7a",
+      "bytes": 586
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_automatic_model_measurement.py",
+      "destination": "src/root_measurer/src/root_automatic_model_measurement.py",
+      "sha256": "f5ea81fe8d35332b747f32d22f299f6942d719ca667894793d1c42fb60388c82",
+      "bytes": 8555
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_automatic_source_profile.py",
+      "destination": "src/root_measurer/src/root_automatic_source_profile.py",
+      "sha256": "e03e23c34694403f0ee405082ef293021f11fc5b0563b9c8c2fd8fbedd82be53",
+      "bytes": 5875
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_axis_radius_profile.py",
+      "destination": "src/root_measurer/src/root_axis_radius_profile.py",
+      "sha256": "094996b370bc8a9fe280242f52a07147b5359e88154d289b25c0783cddbb7237",
+      "bytes": 4110
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_body_measurement_api.py",
+      "destination": "src/root_measurer/src/root_body_measurement_api.py",
+      "sha256": "4e16fadb6a373c41f25ab355542a7368996ed263ffdf3c27eb4d984fbac005f9",
+      "bytes": 4596
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_branch_section_measurement.py",
+      "destination": "src/root_measurer/src/root_branch_section_measurement.py",
+      "sha256": "ad9228376466f312f482df2c5c54ba9b328c9fa2c937cc751af396d00fc16632",
+      "bytes": 6532
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_cap_area_profile.py",
+      "destination": "src/root_measurer/src/root_cap_area_profile.py",
+      "sha256": "1f941ef97514dc4770279a5e906f86a14a0303382595d786df79996f805c05e8",
+      "bytes": 2990
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_centerline_measurement.py",
+      "destination": "src/root_measurer/src/root_centerline_measurement.py",
+      "sha256": "0f37d93985a5c89f217fdb1aa69e4a58bacb1981e2d8ee00b24748e2bbc91ec6",
+      "bytes": 10007
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_closed_triangle_voxelization.py",
+      "destination": "src/root_measurer/src/root_closed_triangle_voxelization.py",
+      "sha256": "66ba5a2acfca1aaee6bdcd191f1b71bd0cbd7d4b920428155a1950365509865b",
+      "bytes": 8304
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_cube_plane_integrals.py",
+      "destination": "src/root_measurer/src/root_cube_plane_integrals.py",
+      "sha256": "797275eda6d50b47ab2c9f7a57338566a133360f6d2738bfdd0a49f1e27a8ee2",
+      "bytes": 4089
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_cube_slab_volume.py",
+      "destination": "src/root_measurer/src/root_cube_slab_volume.py",
+      "sha256": "9888348d4354910fb33f3c5f07c1804a0cf71d20bb4ddaa523b5a67882dbea3d",
+      "bytes": 2142
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_cubical_disk_section.py",
+      "destination": "src/root_measurer/src/root_cubical_disk_section.py",
+      "sha256": "cbaa4a964b19a06ef835643641ed9ad501df995604d3dfdd3d6c421aa6905f38",
+      "bytes": 3582
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_cubical_graph_quotient.py",
+      "destination": "src/root_measurer/src/root_cubical_graph_quotient.py",
+      "sha256": "de2adb5c1b810d6f15ce25f87bf5b2f65b42be8d887610b48e359e2c5d8ddf92",
+      "bytes": 4132
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_cubical_ray_measurement.py",
+      "destination": "src/root_measurer/src/root_cubical_ray_measurement.py",
+      "sha256": "4a874a0f42cdd94c8f44276cde9081100b63d7a11e512ee1e8c22148cf81ab34",
+      "bytes": 2664
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_cubical_section_normal.py",
+      "destination": "src/root_measurer/src/root_cubical_section_normal.py",
+      "sha256": "e0c493087ac99cc25d93b58797a8f32ff4bad93306413e67a41803aff958b4ff",
+      "bytes": 1491
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_cubical_sections.py",
+      "destination": "src/root_measurer/src/root_cubical_sections.py",
+      "sha256": "399def4141b43d5d46e08373606c8d5bcfdf3da4ec8b6c341998265884f607ce",
+      "bytes": 7549
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_cubical_surface.py",
+      "destination": "src/root_measurer/src/root_cubical_surface.py",
+      "sha256": "858f2c98fcb903b598bd520d8ac32eef03f2617851749a648c6dc2f5c81b8648",
+      "bytes": 6312
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_disconnected_cut_reference.py",
+      "destination": "src/root_measurer/src/root_disconnected_cut_reference.py",
+      "sha256": "811dc6a7471b1a0e51689356dbe1ae90e268b06f519443ed54f2f583cd272f84",
+      "bytes": 3672
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_endpoint_measurement.py",
+      "destination": "src/root_measurer/src/root_endpoint_measurement.py",
+      "sha256": "210f18ba6dfa180d48144eba3d9b516fff67ae287206e5233e132da81f9fb769",
+      "bytes": 4104
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_exact_query_sections.py",
+      "destination": "src/root_measurer/src/root_exact_query_sections.py",
+      "sha256": "0a47b57a05b415eb668264fa83bf01eb476b8d88ea20a54bf7577c370a7aff48",
+      "bytes": 10582
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_flat_cap_measurement.py",
+      "destination": "src/root_measurer/src/root_flat_cap_measurement.py",
+      "sha256": "b5c028804318bf936ab474b3f8bbf2afd6a982ef3fd942f8f1691ff3c354f210",
+      "bytes": 7439
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_fragment_triangle_section.py",
+      "destination": "src/root_measurer/src/root_fragment_triangle_section.py",
+      "sha256": "07e5861ec2dccee5cee91d87c5e5a7a6fd973a3ec48b1b94267ba659491ccaad",
+      "bytes": 10007
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_graph_measurement_ledger.py",
+      "destination": "src/root_measurer/src/root_graph_measurement_ledger.py",
+      "sha256": "2349c713a23d4c43a3e0c601016a067c199aeb44271132a16e6ac9fa88d21ff5",
+      "bytes": 6284
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_graph_source_length.py",
+      "destination": "src/root_measurer/src/root_graph_source_length.py",
+      "sha256": "91a61149cae69582dd652ed33603285eb1cf1a80bb8701f34d53891e3a4c9fcb",
+      "bytes": 9264
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_graph_supported_length.py",
+      "destination": "src/root_measurer/src/root_graph_supported_length.py",
+      "sha256": "e029e742703cebe9500b986132fec0a8830e4e166e9c285df0275919d6de3b47",
+      "bytes": 6109
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_guarded_thinning.py",
+      "destination": "src/root_measurer/src/root_guarded_thinning.py",
+      "sha256": "920c6e732b737e6d665dcffbebdaa8f9a110ed3297b230f08f1178dcd12e8367",
+      "bytes": 6230
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_labelled_path_cover.py",
+      "destination": "src/root_measurer/src/root_labelled_path_cover.py",
+      "sha256": "eeeb78b9c7bebf564df02f743a6c7aa0d58f48b6f3ed346954407f7890e95a80",
+      "bytes": 5620
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_lattice_graph.py",
+      "destination": "src/root_measurer/src/root_lattice_graph.py",
+      "sha256": "bbeffb4a51ef2a47012cf3cf763ccd0b6293fe98a3ad54bfc11f7424a12dbede",
+      "bytes": 2818
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_local_network_policy.py",
+      "destination": "src/root_measurer/src/root_local_network_policy.py",
+      "sha256": "5fe1f54ba28c3bae23c7f39f00ba71fa1fe438b54806d100d947f3fa7a80bad3",
+      "bytes": 739
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_local_triangle_section.py",
+      "destination": "src/root_measurer/src/root_local_triangle_section.py",
+      "sha256": "19de24389c53ac30f2a87bd50b9d3ff7f55b8f00fbbed2cf7e48644311e2b7d4",
+      "bytes": 4661
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_measurement_api.py",
+      "destination": "src/root_measurer/src/root_measurement_api.py",
+      "sha256": "80ec1064ee8e845546509f15dda276d1405c560655164fca7207cb0d3623fe82",
+      "bytes": 6671
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_measurement_graph_topology.py",
+      "destination": "src/root_measurer/src/root_measurement_graph_topology.py",
+      "sha256": "36e14b8f07a6df43ba735fa19b7f2083de04bf55716cb49572c6c625e88d4ad2",
+      "bytes": 3029
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_measurement_reference_metrics.py",
+      "destination": "src/root_measurer/src/root_measurement_reference_metrics.py",
+      "sha256": "9d16b97f35f88636cd14059106137be8c88137f078b14aa2b519b024379b455c",
+      "bytes": 5882
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_mesh_body_index.py",
+      "destination": "src/root_measurer/src/root_mesh_body_index.py",
+      "sha256": "9a5d2dea18000d02d034b75d3681457cac67539603fa99168d33567df7525657",
+      "bytes": 2649
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_mesh_delivery_measurement.py",
+      "destination": "src/root_measurer/src/root_mesh_delivery_measurement.py",
+      "sha256": "f74b4af9077b442af2ce7de9869e5e94c98472a88f113991e1b325f4fcdf79ce",
+      "bytes": 31055
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_mesh_resolution.py",
+      "destination": "src/root_measurer/src/root_mesh_resolution.py",
+      "sha256": "51173bd68b68ef9401d2b7a9cc6b7c89554c3f7c9ed999d1e0bd7e9f742eda29",
+      "bytes": 3672
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_mesh_thinning_storage.py",
+      "destination": "src/root_measurer/src/root_mesh_thinning_storage.py",
+      "sha256": "4b2b65d0b554a8bca38b934d69505a937f9826e8edac55e5d5387dee60e7cf9f",
+      "bytes": 5068
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_model_delivery.py",
+      "destination": "src/root_measurer/src/root_model_delivery.py",
+      "sha256": "66e2c5415c4a1637cddd2d7da109eeb1e400fab7880ebbcd833ae274ccc39f6c",
+      "bytes": 13849
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_model_delivery_downloads.py",
+      "destination": "src/root_measurer/src/root_model_delivery_downloads.py",
+      "sha256": "827c8fef618c2ffc99c4451930bc0f31c6d2453b89ceb2ab15c909bfd63032cc",
+      "bytes": 8880
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_model_delivery_exports.py",
+      "destination": "src/root_measurer/src/root_model_delivery_exports.py",
+      "sha256": "49587a54c4336733c2365c091d611ddc048475c9c11e198a390871fb92e965ba",
+      "bytes": 13786
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_model_delivery_reconstruction.py",
+      "destination": "src/root_measurer/src/root_model_delivery_reconstruction.py",
+      "sha256": "5c664cad2f0673869297430a0e6e1e2b00bfc4be297d8b3b2afbb087e2ae17f3",
+      "bytes": 3602
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_model_delivery_runtime.py",
+      "destination": "src/root_measurer/src/root_model_delivery_runtime.py",
+      "sha256": "38608c4366121fbecafd54e594ac451b687cbafebece6cbd4994a50bfc604ae3",
+      "bytes": 9365
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_model_delivery_service.py",
+      "destination": "src/root_measurer/src/root_model_delivery_service.py",
+      "sha256": "97fca46f8154a28c73c33b47aba6da6150a6103f11646a2d3330897bd0552e95",
+      "bytes": 23958
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_model_delivery_validation.py",
+      "destination": "src/root_measurer/src/root_model_delivery_validation.py",
+      "sha256": "f2d0c8d3a3c4277f60457f0bef95480e41c81111b3a181f67ef003e6c34ebc66",
+      "bytes": 5618
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_model_input_loader.py",
+      "destination": "src/root_measurer/src/root_model_input_loader.py",
+      "sha256": "a8794594dbccdf4d6cb489c7caf4b0d8f3200e67bb16cf90219259dba9e21d0a",
+      "bytes": 3518
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_model_interaction.py",
+      "destination": "src/root_measurer/src/root_model_interaction.py",
+      "sha256": "3dab6259ee1bf565ab18c9771c6ed47907d582651160324a76ddac8701b4fc25",
+      "bytes": 12249
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_model_parameters.py",
+      "destination": "src/root_measurer/src/root_model_parameters.py",
+      "sha256": "92825ed31f0397901ea9ea9d58eb4d89ca3bca6847cf76d51ffad17248c2186f",
+      "bytes": 9691
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_native_axis_order.py",
+      "destination": "src/root_measurer/src/root_native_axis_order.py",
+      "sha256": "4c85ea38422f51c2d29729d6943b17772f180dfc444a8f0175a3e7d2f94f1a59",
+      "bytes": 5253
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_native_endpoint_retry.py",
+      "destination": "src/root_measurer/src/root_native_endpoint_retry.py",
+      "sha256": "b3085c6a3c1c4624f8e58cfe442d89052653e2fba710d62a2a0684c8695c2439",
+      "bytes": 9976
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_native_entity_measurement.py",
+      "destination": "src/root_measurer/src/root_native_entity_measurement.py",
+      "sha256": "7dd0a7e89a451cfbc91671befb74f4876ee6735eeb9ec896faf5f420b7fd9482",
+      "bytes": 45853
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_native_junction_fit.py",
+      "destination": "src/root_measurer/src/root_native_junction_fit.py",
+      "sha256": "8e81ebf662b023e01c8a2087e218330e9ce556e506c6541371cc5ab5ba9cf91f",
+      "bytes": 7169
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_native_reference_admission.py",
+      "destination": "src/root_measurer/src/root_native_reference_admission.py",
+      "sha256": "f3393e617c48768a4faa13a2ea9845e93eefc78434da7d17fe4fadd7967d71f3",
+      "bytes": 1343
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_native_section_reference.py",
+      "destination": "src/root_measurer/src/root_native_section_reference.py",
+      "sha256": "0f077dac4f1ce32ff2532d8af918947d632bdb190e6eebbc77ddbd4ea6d3a37c",
+      "bytes": 7702
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_observed_measurement_input.py",
+      "destination": "src/root_measurer/src/root_observed_measurement_input.py",
+      "sha256": "27eb5b01fede96e3f2ea6f27ec7044b497339929d16665fb46814dcba45b3a86",
+      "bytes": 4221
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_observed_volume_measurement.py",
+      "destination": "src/root_measurer/src/root_observed_volume_measurement.py",
+      "sha256": "72d44476b94b04768006222dc8f0c374c26d6fb3bba472a4622c482efbfe06f5",
+      "bytes": 3496
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_polyline_geometry.py",
+      "destination": "src/root_measurer/src/root_polyline_geometry.py",
+      "sha256": "3bab4c0276c6fd777d87c076b0f4a10c3ccd9e7b40558f015db36141bdec564f",
+      "bytes": 3211
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_reconstruction_measurement.py",
+      "destination": "src/root_measurer/src/root_reconstruction_measurement.py",
+      "sha256": "07e37bc8d9a0fff74420e092dab3302c1dee06a25608aadc7afab81d90cb0bb5",
+      "bytes": 14096
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_round_cap_measurement.py",
+      "destination": "src/root_measurer/src/root_round_cap_measurement.py",
+      "sha256": "a508f10d519fcf39c58da9cb04e7c052dd05f33d1bec80ed0450e5714b96f92e",
+      "bytes": 6811
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_section_centroid.py",
+      "destination": "src/root_measurer/src/root_section_centroid.py",
+      "sha256": "5a6288f93cb6143265a4fbaf6fdaa47f895b679c060091c3650d68d33c227842",
+      "bytes": 8194
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_section_semantics.py",
+      "destination": "src/root_measurer/src/root_section_semantics.py",
+      "sha256": "43f821fd9e795b725af1746c8d5b8cd9346f9e1bedb0af03953d2c3de0091c16",
+      "bytes": 931
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_skeleton_topology.py",
+      "destination": "src/root_measurer/src/root_skeleton_topology.py",
+      "sha256": "d085e098e87ad8bd681993b625c6c3bf345b76c62d6aff0917a557a2776338c6",
+      "bytes": 4765
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_solid_measurement_api.py",
+      "destination": "src/root_measurer/src/root_solid_measurement_api.py",
+      "sha256": "d8f496c275e49b89ca3d2f545b41ef119999ea683631cafab10b30698f3d7277",
+      "bytes": 6484
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_span_guarded_thinning.py",
+      "destination": "src/root_measurer/src/root_span_guarded_thinning.py",
+      "sha256": "d1a23fa1f1e73566520df81553e2b1dad9c9bb62ce98d52d7055e907632a847f",
+      "bytes": 5512
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_span_model_pipeline.py",
+      "destination": "src/root_measurer/src/root_span_model_pipeline.py",
+      "sha256": "b7c540c4aee14d7c8d34125504433adca6cfc915fc0f42a645236be8fa7c7150",
+      "bytes": 2542
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_sparse_solid_topology.py",
+      "destination": "src/root_measurer/src/root_sparse_solid_topology.py",
+      "sha256": "8e4ea384fd46e66c5a9befd3739f855c5276fc672f0a85edcfa40788862351b5",
+      "bytes": 4239
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_star_section_reference.py",
+      "destination": "src/root_measurer/src/root_star_section_reference.py",
+      "sha256": "9b20ed0335a713e57b0348789c8a46542cb9c92be592f92d6e8994d5afb33f28",
+      "bytes": 7270
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_terminal_direction.py",
+      "destination": "src/root_measurer/src/root_terminal_direction.py",
+      "sha256": "4b624609dde11783fbd072d772e64500755fb032e58f588c5f417b369f7d5176",
+      "bytes": 3182
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_terminal_tangent_model.py",
+      "destination": "src/root_measurer/src/root_terminal_tangent_model.py",
+      "sha256": "eea5e82cb4ea750d0760494679f99c72347b4d54bac4ed189d3bb2269ea654ac",
+      "bytes": 3368
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_triangle_area_binary_exact.py",
+      "destination": "src/root_measurer/src/root_triangle_area_binary_exact.py",
+      "sha256": "602c5631e0394d4b62b9e5231bc162d8a165703475b3797bd864f662867b51cd",
+      "bytes": 3861
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_triangle_measurement_input.py",
+      "destination": "src/root_measurer/src/root_triangle_measurement_input.py",
+      "sha256": "70fcf676a0656e45ebbdfc16c8cba2fcae176f43b1be4af6cc1984b5aaa1f821",
+      "bytes": 8026
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_triangle_plane_section.py",
+      "destination": "src/root_measurer/src/root_triangle_plane_section.py",
+      "sha256": "f18155fddae63eee8b378eba27dfeb0826dedb764c3d9c8d68cdf3bcd45f8caa",
+      "bytes": 6162
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_triangle_topology.py",
+      "destination": "src/root_measurer/src/root_triangle_topology.py",
+      "sha256": "dc4f1f808a3d9f84e7563eaf80cc3c84ea5b4a9221e70427c3f417ec871ecb96",
+      "bytes": 5593
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_tube_measurement.py",
+      "destination": "src/root_measurer/src/root_tube_measurement.py",
+      "sha256": "2479601abb1f112a0403ab6d41c563ac162d3987194d0706f78b478a4e1513b1",
+      "bytes": 2609
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/src/root_volume_topology.py",
+      "destination": "src/root_measurer/src/root_volume_topology.py",
+      "sha256": "7b15f8ec74fe4ebbde3c664153cd5eca8e41a1c30647ef76460e1d92bd333f0c",
+      "bytes": 4595
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/scripts/score_native_model_delivery.py",
+      "destination": "src/root_measurer/scripts/score_native_model_delivery.py",
+      "sha256": "11922a223ec58746f4d2f37460c001385d2735ea01010f1dea9a89be614714ed",
+      "bytes": 22090
+    },
+    {
+      "source": "ROOTRAW/root_3dgs_skeleton_phenotyping/scripts/serve_model_delivery.py",
+      "destination": "src/root_measurer/scripts/serve_model_delivery.py",
+      "sha256": "f86b70984331927ce7c8884160a95215f1aab11d3171abb81f677aa6aef1542a",
+      "bytes": 11544
+    }
+  ],
+  "external_imports": [
+    "numpy",
+    "scipy",
+    "shapely",
+    "skimage"
+  ],
+  "test_modules": [
+    "test_model_interaction",
+    "test_model_parameters",
+    "test_native_axis_selection",
+    "test_native_delivery_exports",
+    "test_native_delivery_validation",
+    "test_model_delivery_length_status",
+    "test_measurement_reference_metrics",
+    "test_native_entity_delivery"
+  ],
+  "rule": "numerical source closure copied first; portable workflow adaptations recorded by Git",
+  "original_data_and_experiments_included": false
+}

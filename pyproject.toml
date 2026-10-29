@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "root-3d-measurer"
+version = "0.1.0"
+description = "Local 3D root length, original-solid section radius, batch measurement and interactive viewer"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "numpy>=2.1,<3",
+  "scipy>=1.14,<2",
+  "scikit-image>=0.26,<0.27",
+  "shapely>=2.1,<2.2",
+  "psutil>=6,<8",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<10", "build>=1,<2"]
+
+[project.scripts]
+root-measurer = "root_measurer.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["root_measurer"]
+namespaces = false
+
+[tool.setuptools.package-data]
+root_measurer = ["src/*.py", "src/*.html", "src/*.js", "scripts/*.py", "configs/*.json", "configs/*.txt"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-p no:cacheprovider"
+tmp_path_retention_policy = "all"
+tmp_path_retention_count = 10000

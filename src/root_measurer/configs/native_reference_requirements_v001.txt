@@ -1,0 +1,3 @@
+# Reference-scoring only. Install into .runtime/native_delivery_reference_v001.
+# Native prediction does not import this dependency.
+shapely==2.1.2

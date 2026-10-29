@@ -1,0 +1,102 @@
+# Root 3D Measurer · 根系三维测量器
+
+在本机输入三维根系实体，输出唯一中心线总长、分支路径长度、沿线截面等效半径/直径、体积、边界面积和包围盒。浏览器中可点选端点分支、在同一分支选择两点、描绘有序相连根段，以及在连续轴位置现场查询原实体截面。
+
+本仓库是独立迭代的工具。运行不需要原研究项目、历史实验目录、数据集、GPU、云账户或外部网络服务。首版为 `0.1.0`，既有数值内核保留可追溯来源；便携运行层和公共 API 单独维护。
+
+## 安装
+
+Python 3.11 或更新版本。推荐新建虚拟环境，再在仓库目录运行：
+
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+python -m pip install -e ".[dev]"
+root-measurer --version
+```
+
+Linux/macOS 使用 `source .venv/bin/activate`。依赖为 NumPy、SciPy、scikit-image、Shapely 和 psutil；无需终端以外的编译步骤或 Node.js。scikit-image 限定在已验证的 0.26 系列，因为部分现有内核需要其可检查的 Python 实现。
+
+安装完成后，Windows 也可双击 `scripts/start_windows.cmd` 启动工作台。
+
+## 快速开始
+
+```powershell
+# 生成一根可重复的小型合成直根；不是独立验收集。
+root-measurer demo --output runs/demo_inputs --case straight
+
+# 测量。尺度由用户确认；留空时全部使用模型单位。
+root-measurer measure runs/demo_inputs/straight --workspace runs/demo_workspace --scale-mm 100
+
+# 浏览器工作台；输入/输出目录均由用户指定，安装目录不保存运行结果。
+root-measurer gui --workspace runs/demo_workspace --input runs/demo_inputs/straight --open-browser
+```
+
+工作台只监听 `127.0.0.1`，默认由系统分配可用端口。命令会打印实际地址。测量进程禁用自身网络连接，浏览器界面通过本机 HTTP 访问。每次运行新建 `run001`、`run002` 等目录；已有结果不覆盖。
+
+## 输入
+
+**主要输入：原生实体包。** 选择 `entity_prediction.json` 或所在目录，旁边保留其 SHA 绑定的 NPZ 裁块。支持保存的原始占据/实体化占据及原格距；坐标约定与字段说明见 [输入规范](docs/input_format.md)。不需要把原实体转换成 PLY。
+
+**兼容输入：闭合三角网格 PLY。** 使用 `measure model.ply --mesh-target-pitch ... --mesh-target-reason "依据输入特征尺度"`。原三角面用于半径截面，派生占据仅用于轴提取。分辨率和相位挑战未通过时明确阻塞；没有宣称所有外部 PLY 均能完整测量。
+
+## 批量测量
+
+创建 `inputs.json`：相对路径以该清单所在目录为基准。
+
+```json
+{"inputs": ["demo_inputs/straight", "demo_inputs/curve"]}
+```
+
+```powershell
+root-measurer demo --output runs/demo_inputs --case curve
+root-measurer batch runs/inputs.json --workspace runs/batch_workspace
+```
+
+工作台也支持每行一个原生实体路径。按顺序执行，保留失败/取消项及完整分母，生成 `batch_summary.json` 和 `batch_summary.csv`。批量入口目前针对原生实体。
+
+## 交互和 Python API
+
+浏览器中选择操作方式后点选或描绘。粉色叠加表示实际计长范围或新计算的原截面。遮挡处先旋转/放大，或限定已选择的路径。系统只计量用户明确选择的根段，不搜索替代连接路径。
+
+```python
+from root_measurer import measure, query_length, query_radius
+
+result = measure("runs/demo_inputs/straight", workspace="runs/api_workspace")
+print(result.parameters)
+segment = query_length(result.measurement_path, [
+    {"path_id": "path00000", "start": 0.2, "end": 0.8}
+])
+section = query_radius(result.measurement_path, "path00000", 0.5317)
+```
+
+API/命令行区间与 `arc` 使用**模型单位的路径弧长**；结果根据记录的尺度输出 mm 或模型单位。浏览器输入框使用页面显示单位。命令行亦提供 `length`、`radius` 和独立参考 `score`，可用 `--help` 查看。
+
+## 输出和验收
+
+- `_measurement.json`：原始轴、端点、截面和异常记录。
+- `_parameters.json/csv`：整模型参数；路径、沿线、图及原边界显示文件同时生成。
+- `_supervision.json`、进度与日志：用时、内存预算、取消/阻塞状态。
+- 现场查询 JSON：在对应运行的 `interactive_queries/` 保存，绑定测量和输入哈希。
+- `EXPERIMENT_LOG.md` 与 `snapshot/`：可复核的操作和配置记录。
+
+主交互半径是**原实体整个连通材料截面的面积等效半径** `sqrt(A/pi)`，孔洞扣除，混合/分叉截面标注。严格单分支半径作为单独字段保留。预测输出有效率和完整参考覆盖率使用不同分母，不能把覆盖率当成精度。
+
+`score` 使用独立参考轴和原有限实体截面，预测不读取参考文件：
+
+```powershell
+root-measurer score runs/demo_workspace/results/model_delivery_local/run001/model_measurement.json --reference runs/demo_inputs/straight/reference_graph.json --output runs/demo_workspace/analysis/straight_score.json
+```
+
+功能完成、几何端点可用和独立精度通过分别记录。没有参考时显示“未评分”。接触/非唯一截面、未解决端点和无唯一轴的分量不补值、不改成通过。历史批次结论及适用范围见 [验证基线](docs/validation.md) 和 [已知限制](docs/known_limitations.md)。
+
+## 开发
+
+```powershell
+python -m pytest
+python -m build
+```
+
+公共接口位于 `src/root_measurer/api.py`、`cli.py` 和 `runtime.py`。现有内核的文件身份/源码读取机制保留在包内 `src/`、`scripts/`，属于内部实现。源码及网页资源都进入 wheel，安装后无需原仓库。来源映射见 [source_provenance.json](docs/source_provenance.json)。
+
+首版迭代任务见 [路线图](docs/roadmap.md) 和 [变更记录](CHANGELOG.md)。仓库当前为私有，尚未选择开源许可证。

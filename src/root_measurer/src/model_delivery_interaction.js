@@ -1,0 +1,51 @@
+// Explicit user branch intervals; no shortest-path or alternative-route search.
+export async function installRootInteraction(ctx){
+ const {scene,graph,paths,report}=ctx,scale=report.scale_mm_per_model_unit||1,unit=report.scale_mm_per_model_unit?'mm':'模型单位';
+ const card=document.createElement('div');card.className='card';card.id='interactive_measurement';
+ card.innerHTML=`<h2>在模型上测量</h2><label for="measure_mode">操作方式</label><select id="measure_mode"><option value="rotate">浏览旋转</option><option value="terminal">点击端点分支</option><option value="two">同一分支选择两点</option><option value="trace">按住描绘一段根</option><option value="radius">点击位置测半径</option></select><label><input type="checkbox" id="restrict_branch">限定下方当前路径</label><p class="muted">点击或描绘指定根段；右键拖动旋转，滚轮缩放。粉色线为实际计长范围或原实体截面。分叉处可先在下方路径列表选择分支。</p><div><label for="arc_start">起点距离</label><input id="arc_start" type="number" min="0" step="any" value="0"><label for="arc_end">终点／半径位置距离</label><input id="arc_end" type="number" min="0" step="any"><small id="arc_unit"></small></div><button id="measure_interval">测量当前路径区间</button> <button id="measure_terminal">测量当前端点分支</button> <button id="measure_radius">测量该位置半径</button> <button id="clear_measurement">清除选择</button><details><summary>指定截面方向（可选）</summary><p>留空时使用所选根分支的局部切向。方向经过该分支上选中的轴位置。</p><input aria-label="截面法向X" id="normal_x" type="number" step="any"><input aria-label="截面法向Y" id="normal_y" type="number" step="any"><input aria-label="截面法向Z" id="normal_z" type="number" step="any"></details><pre id="interactive_result" style="white-space:pre-wrap">选择操作方式后，在模型上点击或描绘。</pre><a id="query_download" class="action" hidden>导出本次测量 JSON</a>`;
+ scene.parentElement.before(card);const $=s=>card.querySelector(s),mode=$('#measure_mode'),out=$('#interactive_result');$('#arc_unit').textContent=' 距所选路径起点，单位：'+unit;
+ let token;try{const r=await fetch('/api/interaction-session');if(!r.ok)throw Error();token=(await r.json()).token;}catch{out.textContent='交互测量需要在本地测量工作台中打开结果。';return;}
+ const arcs=paths.map(p=>{let a=[0];for(let i=1;i<p.node_ids.length;i++)a.push(a.at(-1)+Math.hypot(...graph.points[p.node_ids[i]].map((v,k)=>v-graph.points[p.node_ids[i-1]][k])));return a;});
+ let first=null,stroke=[],busy=false,blob=null;
+ const note=t=>out.textContent=t;
+ function update(){const i=ctx.selected();$('#arc_end').value=String(arcs[i].at(-1)*scale);first=null;}
+ document.querySelector('#path').addEventListener('change',update);update();
+ async function query(data){if(busy){note('正在测量，请稍候。');return;}busy=true;note('正在原模型上计算…');try{const response=await fetch(new URL('interact',location.href),{method:'POST',headers:{'Content-Type':'application/json','X-Root-Local-Token':token},body:JSON.stringify(data)});const value=await response.json();if(!response.ok)throw Error(value.error||response.status);
+  if(value.kind==='USER_SPECIFIED_ROOT_LENGTH'){note('所选根段长度：'+value.length.toPrecision(9)+' '+unit+'\n已在模型上高亮实际计长路径。');ctx.highlight(value.polyline);}
+  else{note(value.radius==null?'该位置半径未能可靠测得：'+value.status:'半径：'+value.radius.toPrecision(9)+' '+unit+'\n直径：'+value.diameter.toPrecision(9)+' '+unit+'\n截面积：'+value.area.toPrecision(9)+' '+unit+'²\n所选路径：'+value.path_id+'\n位置：'+value.position.map(v=>(v*scale).toPrecision(7)).join(', ')+'\n新计算的原实体截面'+(value.outline.length?'已高亮。':'；截面轮廓未能显示，数值测量单独保留。'));
+   const labels={ordinary_section:'普通截面',mixed_branch:'分叉／混合截面（整个连通截面）',section_with_holes:'带孔截面（已扣除孔洞面积）',unqualified_section:'截面未能可靠确定'};
+   out.textContent+='\n截面类型：'+(labels[value.section_classification]||value.status)+'\n半径口径：原实体整个连通截面的等效半径。';
+   ctx.highlight(value.outlines?.length?value.outlines.flatMap(p=>[...p,null]):value.outline.length?value.outline:[value.position.map((v,i)=>v-.01*(report.entity_binding?.pitch||1)),value.position.map((v,i)=>v+.01*(report.entity_binding?.pitch||1))]);}
+  out.dataset.status=value.status||value.kind;out.dataset.value=String(value.radius??value.length??'');if(blob)URL.revokeObjectURL(blob);blob=URL.createObjectURL(new Blob([JSON.stringify(value,null,2)],{type:'application/json'}));const link=$('#query_download');link.href=blob;link.download='root_measurement_query.json';link.hidden=false;
+ }catch(error){note('测量未完成：'+error.message);}finally{busy=false;}}
+ function radius(hit){const data={action:'radius',path_id:paths[hit.path].path_id,arc:hit.arc};if(hit.position)data.position=hit.position;const values=['x','y','z'].map(k=>$('#normal_'+k).value);if(values.some(v=>v!=='')){if(values.some(v=>v==='')){note('请完整填写三个方向分量，或全部留空。');return;}data.normal=values.map(Number);}query(data);}
+ function terminal(i){const p=paths[i];if(![p.node_ids[0],p.node_ids.at(-1)].some(n=>graph.adjacency[n].length===1)){note('当前路径不是端点分支，请点击或选择一个端点分支。');return;}query({action:'length',intervals:[{path_id:p.path_id,start:0,end:arcs[i].at(-1)}]});}
+ $('#measure_interval').onclick=()=>query({action:'length',intervals:[{path_id:paths[ctx.selected()].path_id,start:Number($('#arc_start').value)/scale,end:Number($('#arc_end').value)/scale}]});
+ $('#measure_terminal').onclick=()=>terminal(ctx.selected());$('#measure_radius').onclick=()=>radius({path:ctx.selected(),arc:Number($('#arc_end').value)/scale});
+ $('#clear_measurement').onclick=()=>{first=null;stroke=[];ctx.highlight([]);note('选择已清除。');};mode.onchange=()=>{first=null;stroke=[];note('当前操作：'+mode.selectedOptions[0].textContent);};
+ function hit(event,forced=null){const rect=scene.getBoundingClientRect(),x=event.clientX-rect.left,y=event.clientY-rect.top;let best=null;
+  for(let p=0;p<paths.length;p++){if(forced!==null&&p!==forced)continue;if(forced===null&&$('#restrict_branch').checked&&p!==ctx.selected())continue;const path=paths[p];if(mode.value==='terminal'&&![path.node_ids[0],path.node_ids.at(-1)].some(n=>graph.adjacency[n].length===1))continue;
+   for(let i=0;i+1<path.node_ids.length;i++){const a=ctx.project(graph.points[path.node_ids[i]]),b=ctx.project(graph.points[path.node_ids[i+1]]),dx=b[0]-a[0],dy=b[1]-a[1],t=Math.max(0,Math.min(1,((x-a[0])*dx+(y-a[1])*dy)/(dx*dx+dy*dy||1))),distance=Math.hypot(x-a[0]-t*dx,y-a[1]-t*dy),depth=a[2]+t*(b[2]-a[2]);if(distance<25&&(!best||distance<best.distance-.5||(Math.abs(distance-best.distance)<.5&&depth<best.depth)))best={path:p,arc:arcs[p][i]+t*(arcs[p][i+1]-arcs[p][i]),distance,depth};}}
+  return best;}
+ function strokeIntervals(){const intervals=[];for(const h of stroke){const previous=intervals.at(-1);if(!previous){intervals.push({path:h.path,start:h.arc,end:h.arc});continue;}if(previous.path===h.path){previous.end=h.arc;continue;}
+   const a=paths[previous.path].node_ids,b=paths[h.path].node_ids,common=[a[0],a.at(-1)].filter(n=>n===b[0]||n===b.at(-1));if(common.length!==1)throw Error('描绘跨过了不相连或不明确的分支，请清除后沿所选根段重画。');const node=common[0];previous.end=node===a[0]?0:arcs[previous.path].at(-1);intervals.push({path:h.path,start:node===b[0]?0:arcs[h.path].at(-1),end:h.arc});}
+  return intervals.filter(p=>Math.abs(p.end-p.start)>1e-12).map(p=>({path_id:paths[p.path].path_id,start:p.start,end:p.end}));}
+ function surfacePick(e,forced=null){
+  const rect=scene.getBoundingClientRect(),ray=ctx.ray(e.clientX-rect.left,e.clientY-rect.top),[vertices,indices]=ctx.surface();
+  const sub=(a,b)=>a.map((v,i)=>v-b[i]),cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]],dot=(a,b)=>a.reduce((s,v,i)=>s+v*b[i],0);let nearest=Infinity;
+  for(let i=0;i<indices.length;i+=3){const a=Array.from(vertices.subarray(indices[i]*3,indices[i]*3+3)),b=Array.from(vertices.subarray(indices[i+1]*3,indices[i+1]*3+3)),c=Array.from(vertices.subarray(indices[i+2]*3,indices[i+2]*3+3)),ab=sub(b,a),ac=sub(c,a),p=cross(ray.direction,ac),det=dot(ab,p);if(Math.abs(det)<1e-20)continue;const t=sub(ray.origin,a),u=dot(t,p)/det;if(u<0||u>1)continue;const q=cross(t,ab),v=dot(ray.direction,q)/det;if(v<0||u+v>1)continue;const distance=dot(ac,q)/det;if(distance>0&&distance<nearest)nearest=distance;}
+  if(!Number.isFinite(nearest))return hit(e,forced);
+  const point=ray.origin.map((v,i)=>v+nearest*ray.direction[i]);let best=null,any=Infinity;
+  for(let p=0;p<paths.length;p++)for(let i=0;i+1<paths[p].node_ids.length;i++){const a=graph.points[paths[p].node_ids[i]],b=graph.points[paths[p].node_ids[i+1]],d=sub(b,a),t=Math.max(0,Math.min(1,dot(sub(point,a),d)/(dot(d,d)||1))),distance=Math.hypot(...sub(point,a).map((v,k)=>v-t*d[k]));any=Math.min(any,distance);if(forced!==null&&p!==forced)continue;if(forced===null&&$('#restrict_branch').checked&&p!==ctx.selected())continue;if(!best||distance<best.distance)best={path:p,arc:arcs[p][i]+t*(arcs[p][i+1]-arcs[p][i]),distance,position:point};}
+  if(best&&forced!==null&&best.distance>any+(report.entity_binding?.pitch||1e-4))return null;return best;
+ }
+ const oldDown=scene.onpointerdown,oldMove=scene.onpointermove,oldUp=scene.onpointerup;let down=null,rotating=false;
+ scene.oncontextmenu=e=>e.preventDefault();
+ scene.onpointerdown=e=>{rotating=mode.value==='rotate'||e.button===2;if(rotating){oldDown(e);return;}down=[e.clientX,e.clientY];scene.setPointerCapture(e.pointerId);if(mode.value==='trace'){stroke=[];const h=hit(e);if(h)stroke.push(h);note('正在描绘；松开后计算所选根段。');}};
+ scene.onpointermove=e=>{if(rotating){oldMove(e);return;}if(down&&mode.value==='trace'){const h=hit(e);if(h){stroke.push(h);if(stroke.length>4000){down=null;note('描绘过长，请分段测量。');}}}};
+ scene.onpointerup=e=>{if(rotating){oldUp(e);rotating=false;return;}if(!down)return;const moved=Math.hypot(e.clientX-down[0],e.clientY-down[1]);down=null;
+  if(mode.value==='trace'){const h=hit(e);if(h)stroke.push(h);try{query({action:'length',intervals:strokeIntervals()});}catch(error){note(error.message);}return;}
+  if(moved>8)return;const forced=mode.value==='two'&&first?first.path:null;const h=mode.value==='radius'||mode.value==='two'?surfacePick(e,forced):hit(e,forced);if(!h){note('请在目标根段附近点击；可以旋转或放大模型，也可在下方选择路径后限定该分支。');return;}ctx.select(h.path);$('#arc_end').value=String(h.arc*scale);
+  if(mode.value==='terminal')terminal(h.path);else if(mode.value==='radius')radius(h);else if(mode.value==='two'){if(!first){first=h;$('#arc_start').value=String(h.arc*scale);note('起点已选定，请点击同一分支的终点。');}else{query({action:'length',intervals:[{path_id:paths[h.path].path_id,start:first.arc,end:h.arc}]});first=null;}}};
+ scene.onpointercancel=()=>{down=null;rotating=false;oldUp();stroke=[];};
+}

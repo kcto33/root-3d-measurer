@@ -154,7 +154,7 @@ def _axis(nodes, component_id, points, lengths, path_ids, endpoints, oriented):
         candidate_strahler_order_base=None, strahler_order_base=None)
 
 
-def build_axis_architecture(graph, *, annotations=None, scale_mm_per_model_unit=None,
+def _build_tree_architecture(graph, *, annotations=None, scale_mm_per_model_unit=None,
                             radius_samples=None, inference_options=None):
     """Partition every graph edge into candidate, automatically inferred or reviewed axes.
 
@@ -433,3 +433,12 @@ def build_axis_architecture(graph, *, annotations=None, scale_mm_per_model_unit=
             'Cycles and competing root bases are preserved without tree repair.',
             'A single continuous axis may contain several Strahler edge orders.',
             'Caller must bind imported annotations to the measurement hash.'])
+
+
+def build_axis_architecture(graph, *, annotations=None, scale_mm_per_model_unit=None,
+                            radius_samples=None, inference_options=None):
+    """Preserve cyclic cores while recovering uniquely rooted bridge fragments."""
+    from root_axis_cycle_regions import build_with_cycle_regions
+    return build_with_cycle_regions(graph, annotations=annotations,
+        scale_mm_per_model_unit=scale_mm_per_model_unit, radius_samples=radius_samples,
+        inference_options=inference_options, tree_builder=_build_tree_architecture)

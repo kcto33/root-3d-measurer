@@ -9,7 +9,7 @@ import io
 import json
 from pathlib import Path
 
-METHOD = 'root-phenotyping-v001'
+METHOD = 'root-phenotyping-v002'
 ANNOTATION_SCHEMA = 'root-phenotype-annotations-v001'
 DEFAULTS = {
     'vertical_axis': 'z', 'down_sign': -1,
@@ -154,6 +154,8 @@ def phenotyping_csv(value, kind='distributions'):
     metadata = dict(method=value['schema_version'], measurement_sha256=value['measurement']['sha256'],
                     settings_sha256=value['settings_sha256'], annotations_sha256=value['annotations_sha256'],
                     output_unit=value['unit'], partial_axis=value['partial_axis'],
+                    architecture_status=value['architecture']['status'],
+                    axis_interpretation_scope='local_bridge_fragments' if value['architecture'].get('analysis_regions') else 'rooted_components_or_unoriented_geometry',
                     vertical_axis=value['settings']['vertical_axis'], down_sign=value['settings']['down_sign'])
     rows = [dict(metadata, **r) for r in records]
     fields = list(dict.fromkeys([*metadata, *(key for row in rows for key in row)]))

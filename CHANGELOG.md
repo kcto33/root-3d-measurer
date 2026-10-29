@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.1 — 2026-10-29
+
+- Recovered root-relative bridge-fragment analysis in cyclic components with an explicit root, preserving every original cyclic edge and the exact unique-edge length ledger.
+- Retained unresolved cyclic cores as geometry; scoped parent/child angles, caliber and taper to their local fragment, withholding cross-core global orders and full-mother density at cyclic boundaries.
+- Added local/global scope to JSON/CSV and result-page labels. Pure rings, competing bases, unresolved cores and global confirmation remain explicit.
+- Phenotyping method identity is now root-phenotyping-v002; annotation input format remains compatible.
+
 ## 0.3.0 — 2026-10-29
 
 - Added arc-weighted diameter classes and diameter-by-depth estimates with qualified single-branch radius coverage and explicit missing lengths.

@@ -124,6 +124,9 @@ export async function installPhenotyping({apiURL, report, graph, paths, scene, p
       ROOTED_CANDIDATE:'候选结构，待核对', ROOTED_CONFIRMED:'人工确认', ROOTED_PARTIALLY_CONFIRMED:'部分根轴已确认',
       ROOTED_AUTO_INFERRED:'多证据自动推断（待生物学验证）', ROOTED_REVIEW_RECOMMENDED:'部分续接证据不足，建议核对',
       ROOTED_UNRESOLVED_CONTINUATION:'分叉续接有歧义', BLOCKED_CYCLIC_COMPONENT:'保留闭环，未推断层级',
+      PARTIAL_ROOTED_CYCLIC_COMPONENT:'保留环内区域，分析环外有向根段', PARTIAL_ROOTED_ARCHITECTURE:'含环局部根段分析',
+      CYCLIC_CORE_INTERRUPTS_COMPLETE_MOTHER_AXIS:'环内区域中断完整母根，长度未定',
+      LOCAL_FRAGMENT_CANDIDATE_RELATIONSHIPS:'局部根段候选关系，非整根统计',
       BLOCKED_MULTIPLE_BASES_IN_COMPONENT:'同一分量有多个竞争根基', NO_EDGES:'没有可测边',
       CONFIRMED_ARCHITECTURE:'人工确认的根轴解释', CANDIDATE_ARCHITECTURE:'候选根轴解释',
       AUTO_INFERRED_ARCHITECTURE:'多证据自动推断的根轴解释',
@@ -313,7 +316,7 @@ export async function installPhenotyping({apiURL, report, graph, paths, scene, p
     const interpretable=(a.axes||[]).filter(axis=>['CANDIDATE','CONFIRMED','AUTO_INFERRED'].includes(axis.confirmation_status)).length;
     for(const [label,value,note] of [['已提取轴长',format(d.total_axis_length)+' '+unit(),d.partial_axis?'仅当前提取部分':'完整性与精度另验'],
       ['合格半径覆盖',percent(d.sample_coverage?.qualified_radius_arc_fraction),'以已提取轴长为分母'],
-      ['可解释根轴',interpretable?String(interpretable)+' 条':'待指定',statusLabel(a.status)+'；'+(a.axes?.length??0)+' 个几何分段']]) {
+      [a.analysis_regions?'可分析有向根段':'可解释根轴',interpretable?String(interpretable)+' 条':'待指定',statusLabel(a.status)+'；'+(a.axes?.length??0)+' 个几何分段']]) {
       const cell=add(stats,'div',null,'ph-stat');add(cell,'small',label);add(cell,'strong',value);add(cell,'small',note);
     }
     renderBases();renderComponents();renderJunctions();renderAxisSelect();
@@ -372,6 +375,7 @@ export async function installPhenotyping({apiURL, report, graph, paths, scene, p
     for(const component of result.architecture.components||[]) {
       const row=add(box,'div',null,'ph-junction');add(row,'strong','分量 '+component.component_id+' · '+statusLabel(component.status));
       add(row,'p',component.node_count+' 个节点，'+component.edge_count+' 条边；'+(component.axis_ids?.length||0)+' 个当前几何分段。','ph-note');
+      if(component.status==='PARTIAL_ROOTED_CYCLIC_COMPONENT')add(row,'p','环外有向根段覆盖 '+percent(component.rooted_fragment_arc_fraction)+'；环内 '+component.cyclic_core_edge_count+' 条原边完整保留。未选择穿环路径；跨环全局根序及完整母根长度不可用。','ph-note');
       const confirmed=component.status==='ROOTED_CONFIRMED';
       const eligible=['ROOTED_CANDIDATE','ROOTED_PARTIALLY_CONFIRMED','ROOTED_CONFIRMED','ROOTED_AUTO_INFERRED','ROOTED_REVIEW_RECOMMENDED'].includes(component.status);
       button(row,confirmed?'撤回此分量确认':'已核对：确认此分量',()=>annotationEdit(()=>{
@@ -426,6 +430,9 @@ export async function installPhenotyping({apiURL, report, graph, paths, scene, p
     const short=selectedAxis.slice(-8);add(box,'h3','根轴 …'+short+' · '+statusLabel(geometry.confirmation_status));
     add(box,'p','根类型：'+geometry.root_type+'；发育根序：'+(geometry.developmental_order!=null?geometry.developmental_order:geometry.candidate_developmental_order!=null?geometry.candidate_developmental_order+'（候选）':'不可用')+'。基轴从 0 计，侧根为母根级次加 1。','ph-note');
     if(!axis){add(box,'p','该根轴的详细性状尚不可用。','ph-note');return;}
+    if(axis.axis_scope==='ROOTED_BRIDGE_FRAGMENT')add(box,'p','当前显示环外局部有向根段。夹角、粗度和渐细只在本段内计算；穿环续接与全局根序未推断，分段数不能当作生物根数。','ph-note');
+    if(axis.axis_scope==='ROOTED_BRIDGE_FRAGMENT'&&axis.local_candidate_developmental_order!=null)add(box,'p','本片段内的候选级次：'+axis.local_candidate_developmental_order+'（从片段入口计0，不是整株发育根序）。','ph-note');
+    if(axis.axis_scope==='CYCLIC_CORE')add(box,'p','本段属于保留的环内几何。原边和长度完整计入总量；穿环方向、父子身份和完整根序尚未确定。','ph-note');
     const branching=axis.branching||{},diameter=axis.diameter_distribution||{},taper=axis.taper||{};
     const metric=(name,value,u='')=>[name,format(value?.value)+(value?.value==null?'':' '+u),statusLabel(value?.status)];
     propertyRows(box,[['根轴长度',format(axis.length)+' '+unit(),statusLabel(axis.confirmation_status)],
@@ -433,13 +440,14 @@ export async function installPhenotyping({apiURL, report, graph, paths, scene, p
       ['直径中位数 / P95',format(diameter.median)+' / '+format(diameter.p95)+' '+unit(),'仅合格单分支样本'],
       metric('侧根数量',branching.lateral_count,'条'),metric('全母根侧根密度',branching.lrbd_whole_axis,unit()+'⁻¹'),
       metric('分枝区侧根密度',branching.lrbd_branched_zone,unit()+'⁻¹'),
+      ...(branching.lrbd_observed_fragment?[metric('局部观测根段侧分枝密度',branching.lrbd_observed_fragment,unit()+'⁻¹')]:[]),
       ['侧根间距中位数',format(branching.interbranch_distance_statistics?.median)+' '+unit(),statusLabel(branching.interbranch_distance_statistics?.status)],
       ['侧根间距 CV',format(branching.interbranch_distance_statistics?.cv),'沿母根弧长，不是空间直线距离'],
       metric('基部未分枝区长度',branching.basal_unbranched_length,unit()),
       metric('根尖未分枝区长度',branching.apical_unbranched_length,unit()),
       metric('末侧根至观测末端',branching.observed_apical_unbranched_length,unit()),
       ['渐细率（直径 / 弧长）',format(taper.taper_rate),statusLabel(taper.status)+'；正值表示向末端变细'],['渐细回归 R²',format(taper.r_squared),'描述拟合，不代表测量精度'],
-      ['整根对向下方向夹角',format(axis.whole_axis_direction?.growth_angle_from_down_deg)+'°',statusLabel(axis.whole_axis_direction?.status)]]);
+      [axis.axis_scope==='ROOTED_BRIDGE_FRAGMENT'?'当前根段对向下方向夹角':'整根对向下方向夹角',format(axis.whole_axis_direction?.growth_angle_from_down_deg)+'°',statusLabel(axis.whole_axis_direction?.status)]]);
     add(box,'p','全母根密度 = 侧根数 / 母根长度；分枝区密度 = 侧根数 / 首末侧根之间弧长。真实根尖未确认时，根尖未分枝区保持不可用。','ph-note');
     drawProfile(box,axis);
     const details=add(box,'details');add(details,'summary','沿根轴直径样本与缺失');
@@ -459,11 +467,12 @@ export async function installPhenotyping({apiURL, report, graph, paths, scene, p
       const row=samples[i];if(!row.available){ctx.strokeStyle='#e68c82';ctx.beginPath();ctx.moveTo(x(row.support_start),height-bottom+3);ctx.lineTo(x(row.support_end),height-bottom+3);ctx.stroke();}
       else if(i%step===0&&finite(row.diameter)){ctx.fillStyle='#83ddc3';ctx.beginPath();ctx.arc(x(row.s),y(row.diameter),2,0,Math.PI*2);ctx.fill();}
     }
-    add(parent,'p','横轴为沿线弧长，'+(axis.arc_origin==='axis_base'?'从根轴基部计起；':'从几何路径的任意端点计起，未定义生长方向；')+'绿点为合格直径样本，红线为缺失支持区间。'+(step>1?'显示已抽稀，导出保留全部样本。':''),'ph-note');
+    add(parent,'p','横轴为沿线弧长，'+(axis.arc_origin==='axis_base'?'从根轴基部计起；':axis.arc_origin==='root_relative_bridge_fragment_start'?'从当前有向片段入口计起；':'从几何路径的任意端点计起，未定义生长方向；')+'绿点为合格直径样本，红线为缺失支持区间。'+(step>1?'显示已抽稀，导出保留全部样本。':''),'ph-note');
   }
   function renderRelations() {
     const box=$('#ph_relations');box.replaceChildren();const all=result?.axis_traits?.branch_relations||[];
     const rows=selectedAxis?all.filter(r=>r.parent_axis_id===selectedAxis||r.child_axis_id===selectedAxis):all;
+    if(result.architecture.analysis_regions)add(box,'p','含环结果只列同一桥片段内的候选关系与当前片段PCA角；不推断穿环母侧身份。','ph-note');
     add(box,'p','显示与所选根轴有关的 '+rows.length+' 条关系。局部切线角与整根 PCA 角分别列出。','ph-note');
     table(box,[['母根 → 子根',r=>r.parent_axis_id.slice(-6)+' → '+r.child_axis_id.slice(-6)],
       ['附着弧长 / '+unit(),r=>format(r.attachment_arc)],['局部夹角',r=>format(r.local_insertion_angle_deg?.value)+'°'],

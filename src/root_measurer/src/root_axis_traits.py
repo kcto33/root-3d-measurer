@@ -285,6 +285,14 @@ def _branching(axis, children):
                     status if axis['length'] > 0 else 'ZERO_MOTHER_AXIS_LENGTH',
                     numerator=count,denominator=axis['length'],denominator_name='whole_observed_mother_axis_length',
                     formula='N/L_mother')
+    fragment_density = None
+    if axis.get('axis_scope') == 'ROOTED_BRIDGE_FRAGMENT':
+        base['scope'] = 'local bridge-connected fragment; cyclic cores and cross-core relationships excluded'
+        fragment_density = dict(whole, status='LOCAL_FRAGMENT_CANDIDATE_RELATIONSHIPS',
+                                denominator_name='observed_bridge_fragment_length', formula='N_local/L_fragment')
+        if axis.get('cyclic_boundary_node_ids'):
+            whole = _result(status='CYCLIC_CORE_INTERRUPTS_COMPLETE_MOTHER_AXIS',
+                            numerator=count, denominator=None, formula='N/L_complete_mother_unavailable')
     zone = positions[-1]-positions[0] if count else None
     zone_result = _result(count/zone if zone is not None and zone > 0 else None,
                           status if zone is not None and zone > 0 else 'NO_POSITIVE_BRANCHED_ZONE',
@@ -303,6 +311,7 @@ def _branching(axis, children):
     else:
         basal = apical = basal_observed = apical_observed = no_branch
     return dict(base,lateral_count=_result(count,status),lrbd_whole_axis=whole,lrbd_branched_zone=zone_result,
+                lrbd_observed_fragment=fragment_density,
                 attachment_arc_positions=positions,interbranch_distances=intervals,
                 interbranch_distance_statistics=dict(_distribution(intervals),
                     status='AVAILABLE' if intervals else 'AT_LEAST_TWO_LATERALS_REQUIRED',
@@ -313,7 +322,7 @@ def _branching(axis, children):
 
 def _group_summary(axes):
     total = math.fsum(a['length'] for a in axes)
-    biological_axes=all(a['_directed'] and a.get('confirmation_status') not in ('UNRESOLVED','GEOMETRY_ONLY') for a in axes)
+    biological_axes=all(a['_directed'] and a.get('axis_scope')!='ROOTED_BRIDGE_FRAGMENT' and a.get('confirmation_status') not in ('UNRESOLVED','GEOMETRY_ONLY') for a in axes)
     return dict(axis_count=len(axes) if biological_axes else None,
                 geometric_partition_count=len(axes),total_length=total,
                 count_scope='oriented root-axis interpretations' if biological_axes else 'geometry partitions only; root-axis count unresolved',
@@ -395,7 +404,9 @@ def build_axis_traits(graph, architecture, samples, *, options=None, scale_mm_pe
     retained = ('axis_id','component_id','node_ids','edge_ids','parent_axis_id','attachment_node_id',
                 'children_axis_ids','root_type','orientation_status','confirmation_status','relationship_status',
                 'developmental_order','candidate_developmental_order','strahler_orders','candidate_strahler_orders',
-                'strahler_order_base','candidate_strahler_order_base','basal_endpoint_type','apical_endpoint_type','closed')
+                'strahler_order_base','candidate_strahler_order_base','basal_endpoint_type','apical_endpoint_type','closed',
+                'analysis_region_id','axis_scope','cyclic_boundary_node_ids','global_hierarchy_status',
+                'local_candidate_developmental_order','local_candidate_strahler_orders')
     owned_edges = set()
     for original in architecture.get('axes',[]):
         axis = {k:original[k] for k in retained if k in original}
@@ -426,6 +437,10 @@ def build_axis_traits(graph, architecture, samples, *, options=None, scale_mm_pe
         axis['arc_origin'] = ('oriented_geometric_fragment_start' if axis.get('confirmation_status')=='UNRESOLVED' else
                               'axis_base' if axis['_directed'] else 'arbitrary_geometric_path_start')
         axis['taper'] = _taper(axis)
+        if axis.get('axis_scope') == 'ROOTED_BRIDGE_FRAGMENT':
+            axis['arc_origin'] = 'root_relative_bridge_fragment_start'
+            axis['length_scope'] = 'observed bridge-connected fragment; excludes unresolved cyclic-core intervals'
+            axis['taper']['scope'] = 'valid measured support on this bridge fragment only; not whole-root taper across a cyclic core'
         if axis['_directed'] and not axis.get('closed') and axis.get('confirmation_status')!='UNRESOLVED':
             direction = _continuous_pca(p)
             down = np.zeros(3);down['xyz'.index(config['vertical_axis'])]=config['down_sign']
@@ -464,6 +479,9 @@ def build_axis_traits(graph, architecture, samples, *, options=None, scale_mm_pe
                         confirmation_status=('ANNOTATION_CONFIRMED' if axis.get('confirmation_status')=='CONFIRMED' and parent.get('confirmation_status')=='CONFIRMED' else
                             'AUTO_INFERRED' if axis.get('confirmation_status') in ('AUTO_INFERRED','CONFIRMED') and parent.get('confirmation_status') in ('AUTO_INFERRED','CONFIRMED') else 'CANDIDATE'),
                         biological_accuracy_validated=False,unit=unit)
+        if axis.get('axis_scope') == 'ROOTED_BRIDGE_FRAGMENT':
+            relation.update(scope='within one uniquely root-relative bridge fragment; no cyclic-core crossing',
+                            analysis_region_id=axis.get('analysis_region_id'),global_parent_identity_validated=False)
         unresolved=axis.get('confirmation_status')=='UNRESOLVED' or parent.get('confirmation_status')=='UNRESOLVED'
         if not parent['_directed'] or not axis['_directed'] or parent.get('closed') or axis.get('closed') or unresolved:
             if unresolved:

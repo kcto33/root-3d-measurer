@@ -30,7 +30,7 @@ def radius_statistics(samples):
         missing_interpolated=False)
 
 
-def build_parameters(report,*,solid=None,boundary_face_count=None,mesh=None):
+def build_parameters(report,*,solid=None,boundary_face_count=None,mesh=None,morphology_options=None):
     from root_model_delivery_exports import measurement_tables
     from root_graph_measurement_ledger import graph_measurement_ledger
     from root_model_delivery_validation import complete_length_state
@@ -98,7 +98,10 @@ def build_parameters(report,*,solid=None,boundary_face_count=None,mesh=None):
             radius_max=None if stats['maximum'] is None else stats['maximum']*factor,
             diameter_mean=None if stats['mean'] is None else 2*stats['mean']*factor,
             valid_radius_arc_fraction=stats['valid_arc_fraction'],radius_scope=stats['scope']))
-    return dict(schema_version='root-model-parameters-v001',model=report.get('case_label'),unit=unit,
+    from root_model_morphology import build_morphology
+    morphology=build_morphology(report,solid=solid,mesh=mesh,options=morphology_options,geometry=geometry)
+    rows.extend(morphology['metrics'])
+    return dict(schema_version='root-model-parameters-v001',model=report.get('case_label'),unit=unit,morphology=morphology,
         physical_scale_supplied=scale is not None,scale_mm_per_model_unit=scale,
         geometry=geometry,radius_model_units=radii,connected_section_radius_model_units=connected,coverage=coverage,length_state=state,
         complete_model_length_available=not blocked,metrics=rows,paths=per_path,

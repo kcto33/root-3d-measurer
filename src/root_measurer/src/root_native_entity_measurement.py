@@ -723,7 +723,8 @@ def run_native_worker(args):
                                   resume_axis_from=args.resume_axis_from,
                                   backend=args.native_backend,progress=progress)
     progress('exports_and_original_boundary')
-    data,out,html = write_native_delivery(measurement,prefix,experiment,solid)
+    data,out,html = write_native_delivery(measurement,prefix,experiment,solid,
+        morphology_options=dict(vertical_axis=getattr(args,'vertical_axis','z'),down_sign=getattr(args,'down_sign',-1)))
     check_entity_unchanged(result['entity_binding'])
     progress('complete',delivery=str(out),viewer=str(html),summary=data['summary'])
     return data

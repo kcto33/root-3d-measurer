@@ -6,7 +6,12 @@ sys.path.insert(0,str(P/'src'))
 from root_model_delivery_exports import file_reference,write_json,local_date
 
 
-def run(inputs,folder,scale=None,max_memory_mb=8192,cancel_file=None):
+MORPH_KEYS=['fractal_dimension_3d','root_depth','horizontal_spread','convex_hull_volume','volume_solidity','hull_length_density','branching_density','tortuosity_mean','inclination_mean','axis_depth_d50','axis_depth_d95']
+
+
+def run(inputs,folder,scale=None,max_memory_mb=8192,cancel_file=None,vertical_axis='z',down_sign=-1):
+    from root_model_morphology import settings
+    settings(dict(vertical_axis=vertical_axis,down_sign=down_sign))
     folder=Path(folder).resolve()
     if folder.parent.name!='model_delivery_local' or not (folder.parents[2]/'ROOT_MEASURER_WORKSPACE.json').is_file():
         raise ValueError('EXPERIMENT_MODEL_DELIVERY_RUN_REQUIRED')
@@ -23,7 +28,7 @@ def run(inputs,folder,scale=None,max_memory_mb=8192,cancel_file=None):
                                 complete_length=False,radius_valid_arc_fraction=None,status='CANCELLED_BEFORE_START'))
             continue
         command=[sys.executable,'-B',str(P/'scripts/measure_model_delivery.py'),'--entity',str(source),
-                 '--output-prefix',str(prefix),'--max-memory-mb',str(max_memory_mb)]
+                 '--output-prefix',str(prefix),'--max-memory-mb',str(max_memory_mb),'--vertical-axis',vertical_axis,'--down-sign',str(down_sign)]
         if cancel_file:command+=['--cancel-file',str(cancel_file)]
         if scale is not None:command+=['--scale-mm',str(scale)]
         event=dict(index=i,total=len(inputs),input=str(source),phase='measurement')
@@ -36,6 +41,10 @@ def run(inputs,folder,scale=None,max_memory_mb=8192,cancel_file=None):
                  complete_length=False,radius_valid_arc_fraction=None,status='FAILED')
         if params.is_file():
             value=json.loads(params.read_text(encoding='utf-8'))
+            metrics={m['parameter']:m for m in value['metrics']}
+            row.update({key:metrics.get(key,{}).get('value') for key in MORPH_KEYS})
+            row.update(unit=value['unit'],vertical_axis=vertical_axis,down_sign=down_sign,
+                       morphology_status={key:metrics.get(key,{}).get('status') for key in MORPH_KEYS})
             row.update(complete_length=value['complete_model_length_available'],
                        radius_valid_arc_fraction=value['coverage']['V_radius_out'],
                        connected_radius_valid_arc_fraction=value.get('connected_section_radius_model_units',{}).get('valid_arc_fraction'),
@@ -47,7 +56,7 @@ def run(inputs,folder,scale=None,max_memory_mb=8192,cancel_file=None):
         measurements=records,all_complete_lengths=all(r['complete_length'] for r in records),
         complete_radius_claim=False,missing_intervals_retained=True))
     with (folder/'batch_summary.csv').open('x',encoding='utf-8-sig',newline='') as f:
-        fields=['index','input','exit_code','prefix','complete_length','radius_valid_arc_fraction','connected_radius_valid_arc_fraction','status']
+        fields=['index','input','exit_code','prefix','complete_length','radius_valid_arc_fraction','connected_radius_valid_arc_fraction','status','unit','vertical_axis','down_sign',*MORPH_KEYS,'morphology_status']
         writer=csv.DictWriter(f,fieldnames=fields,extrasaction='ignore');writer.writeheader();writer.writerows(records)
     with (experiment/'EXPERIMENT_LOG.md').open('a',encoding='utf-8') as f:
         f.write('\n'+local_date()+' RESULT batch '+folder.relative_to(experiment).as_posix()+
@@ -58,7 +67,8 @@ def run(inputs,folder,scale=None,max_memory_mb=8192,cancel_file=None):
 if __name__=='__main__':
     ap=argparse.ArgumentParser();ap.add_argument('--manifest',type=Path,required=True)
     ap.add_argument('--output-dir',type=Path,required=True);ap.add_argument('--scale-mm',type=float)
+    ap.add_argument('--vertical-axis',choices=['x','y','z'],default='z');ap.add_argument('--down-sign',type=int,choices=[-1,1],default=-1)
     ap.add_argument('--max-memory-mb',type=int,default=8192);ap.add_argument('--cancel-file',type=Path);a=ap.parse_args()
     value=json.loads(a.manifest.read_text(encoding='utf-8'));inputs=value['inputs']
     if not inputs or len(inputs)>1000:raise ValueError('BATCH_SIZE_1_TO_1000_REQUIRED')
-    run([a.manifest.resolve().parent/path for path in inputs],a.output_dir,a.scale_mm,a.max_memory_mb,a.cancel_file)
+    run([a.manifest.resolve().parent/path for path in inputs],a.output_dir,a.scale_mm,a.max_memory_mb,a.cancel_file,a.vertical_axis,a.down_sign)

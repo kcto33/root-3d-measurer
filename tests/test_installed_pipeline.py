@@ -19,3 +19,15 @@ def test_generated_entity_complete_measurement_and_fresh_section(control_workspa
     assert math.isclose(section["area"], 320)
     assert math.isclose(section["radius"], math.sqrt(320 / math.pi))
     assert not section["stored_samples_interpolated"]
+    from root_measurer import morphology
+    from root_model_delivery_exports import file_reference
+    before=file_reference(result.measurement_path)
+    changed=morphology(result.measurement_path,vertical_axis='x',down_sign=1)
+    assert changed['settings']['vertical_axis']=='x'
+    assert changed['measurement']==before==file_reference(result.measurement_path)
+    assert changed['source_binding']['cells_sha256']
+    assert parameters['morphology']['settings']['vertical_axis']=='z'
+    assert parameters['morphology']['settings']['down_sign']==-1
+    traits={m['parameter']:m['value'] for m in changed['metrics']}
+    assert math.isclose(traits['root_depth'],20)
+    assert traits['fractal_dimension_3d'] is not None

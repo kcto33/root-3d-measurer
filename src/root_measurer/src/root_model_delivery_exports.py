@@ -211,7 +211,7 @@ def native_surface_buffers(solid, cache_dir):
     return folder, data
 
 
-def write_native_delivery(report_path, prefix, experiment_root, solid):
+def write_native_delivery(report_path, prefix, experiment_root, solid, morphology_options=None):
     prefix, experiment_root = Path(prefix), Path(experiment_root)
     report = json.loads(Path(report_path).read_text(encoding='utf-8'))
     exports, paths, coverage = export_tables(report, prefix)
@@ -220,7 +220,7 @@ def write_native_delivery(report_path, prefix, experiment_root, solid):
     surface = dict(surface, buffers={k:file_reference(surface_folder/v['path'], prefix.parent)
                                    for k,v in surface['buffers'].items()})
     from root_model_parameters import write_parameters
-    parameters=write_parameters(report,prefix,solid=solid,boundary_face_count=surface['quads'])
+    parameters=write_parameters(report,prefix,solid=solid,boundary_face_count=surface['quads'],morphology_options=morphology_options)
     measurement_ref = file_reference(report_path, prefix.parent)
     result = dict(schema_version='root-native-delivery-v001', measurement=measurement_ref,
                   case_label=report.get('case_label', '原生实体测量'),

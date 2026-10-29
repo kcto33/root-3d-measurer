@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 from . import __version__
-from .api import MeasurementError, measure, query_length, query_radius
+from .api import MeasurementError, measure, query_length, query_radius, morphology
 from .runtime import activate, initialize_workspace, script
 
 
@@ -49,6 +49,12 @@ def parser():
     score.add_argument("measurement", type=Path)
     score.add_argument("--reference", type=Path, required=True)
     score.add_argument("--output", type=Path, required=True)
+    morph = commands.add_parser("morphology", help="原实体形态指标、有限尺度三维盒计数；保留原测量")
+    morph.add_argument("measurement", type=Path)
+    morph.add_argument("--output", type=Path, required=True, help="新输出前缀；已有文件拒绝覆盖")
+    for command in (one, batch, morph):
+        command.add_argument("--vertical-axis", choices=["x", "y", "z"], default="z")
+        command.add_argument("--down-sign", type=int, choices=[-1, 1], default=-1)
     return ap
 
 
@@ -63,7 +69,7 @@ def main(argv=None):
         elif args.command == "measure":
             result = measure(args.model, workspace=args.workspace, scale_mm=args.scale_mm,
                 max_memory_mb=args.max_memory_mb, mesh_target_pitch=args.mesh_target_pitch,
-                mesh_target_reason=args.mesh_target_reason)
+                mesh_target_reason=args.mesh_target_reason, vertical_axis=args.vertical_axis, down_sign=args.down_sign)
             print(json.dumps({"prefix": str(result.prefix), "parameters": result.parameters}, ensure_ascii=False))
         elif args.command == "batch":
             root = initialize_workspace(args.workspace)
@@ -73,10 +79,24 @@ def main(argv=None):
                 number += 1
             cmd = [sys.executable, "-B", str(script("measure_model_batch.py")), "--manifest",
                    str(args.manifest.resolve()), "--output-dir", str(base / f"run{number:03d}"),
-                   "--max-memory-mb", str(args.max_memory_mb)]
+                   "--max-memory-mb", str(args.max_memory_mb), "--vertical-axis", args.vertical_axis, "--down-sign", str(args.down_sign)]
             if args.scale_mm is not None:
                 cmd += ["--scale-mm", str(args.scale_mm)]
             return subprocess.call(cmd, env=dict(os.environ, PYTHONUTF8="1", PYTHONDONTWRITEBYTECODE="1"))
+        elif args.command == "morphology":
+            from root_model_morphology import morphology_csv
+            from root_model_delivery_exports import write_json
+            value = morphology(args.measurement, vertical_axis=args.vertical_axis, down_sign=args.down_sign)
+            prefix = args.output.resolve()
+            targets = [prefix.with_name(prefix.name+suffix) for suffix in ("_morphology.json", "_morphology.csv", "_depth_profile.csv")]
+            if any(p.exists() for p in targets):
+                raise ValueError("MORPHOLOGY_OUTPUT_EXISTS")
+            prefix.parent.mkdir(parents=True, exist_ok=True)
+            write_json(targets[0], value)
+            for target, raw in [(targets[1], morphology_csv(value)), (targets[2], morphology_csv(value, profile=True))]:
+                with target.open("xb") as stream:
+                    stream.write(raw)
+            print(json.dumps({"files": [str(p) for p in targets]}, ensure_ascii=False))
         elif args.command == "demo":
             from build_native_measurement_acceptance import build
             print(json.dumps(build(args.case, args.output.resolve()), ensure_ascii=False))

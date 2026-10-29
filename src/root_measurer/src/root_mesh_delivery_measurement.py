@@ -379,7 +379,7 @@ def measure_mesh(mesh_path,output,*,target_pitch,target_reason,coordinate_units=
     return result,mesh
 
 
-def write_mesh_delivery(report_path,prefix,experiment,mesh):
+def write_mesh_delivery(report_path,prefix,experiment,mesh,morphology_options=None):
     from root_model_delivery_exports import export_tables
     prefix=Path(prefix);experiment=Path(experiment);report=json.loads(Path(report_path).read_text(encoding='utf-8'))
     exports,paths,coverage=export_tables(report,prefix)
@@ -403,7 +403,7 @@ def write_mesh_delivery(report_path,prefix,experiment,mesh):
         write_json(manifest,surface)
     surface=dict(surface,buffers={k:file_reference(folder/ref['path'],prefix.parent) for k,ref in surface['buffers'].items()})
     from root_model_parameters import write_parameters
-    parameters=write_parameters(report,prefix,mesh=mesh)
+    parameters=write_parameters(report,prefix,mesh=mesh,morphology_options=morphology_options)
     result=dict(schema_version='root-native-delivery-v001',input_kind='triangle_ply',measurement=file_reference(report_path,prefix.parent),
         case_label=report['case_label'],summary=dict(status=report['status'],candidate_length=report.get('length'),paths=len(paths),coverage=coverage,
         automatic_nodes=len((report.get('candidate_centerline') or {}).get('points',[]))),exports=exports,surface=surface,parameters=parameters,
@@ -426,6 +426,7 @@ def run_mesh_worker(args):
     report=prefix.with_name(prefix.name+'_measurement.json')
     result,mesh=measure_mesh(args.mesh,report,target_pitch=args.mesh_target_pitch,target_reason=args.mesh_target_reason,
                            coordinate_units=args.coordinate_units,scale_mm=args.scale_mm,progress=progress,resume_target_from=args.mesh_resume_target_from)
-    delivery=write_mesh_delivery(report,prefix,experiment,mesh)
+    delivery=write_mesh_delivery(report,prefix,experiment,mesh,
+        morphology_options=dict(vertical_axis=getattr(args,'vertical_axis','z'),down_sign=getattr(args,'down_sign',-1)))
     progress('complete',status=result['status'],network_policy=network_policy_state())
     return delivery

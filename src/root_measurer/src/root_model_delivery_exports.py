@@ -21,8 +21,11 @@ def file_reference(path, relative_to=None):
     with path.open('rb') as stream:
         for block in iter(lambda: stream.read(1048576), b''):
             digest.update(block)
-    return dict(path=str(path) if relative_to is None else
-                __import__('os').path.relpath(path, relative_to).replace('\\', '/'),
+    reference=str(path)
+    if relative_to is not None:
+        try:reference=__import__('os').path.relpath(path, relative_to).replace('\\', '/')
+        except ValueError:pass  # Windows cannot express a relative path across drives.
+    return dict(path=reference,
                 sha256=digest.hexdigest(), bytes=path.stat().st_size)
 
 

@@ -1,6 +1,7 @@
 @echo off
 setlocal
 cd /d "%~dp0.."
+set "PYTHONPATH=%CD%\src"
 if exist ".venv\Scripts\python.exe" (
   ".venv\Scripts\python.exe" -m root_measurer gui --workspace runs\default --open-browser
 ) else (

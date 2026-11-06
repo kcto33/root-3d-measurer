@@ -21,7 +21,7 @@ from root_model_delivery_reconstruction import reconstruction_comparison,reconst
 PROJECT=Path(__file__).resolve().parents[1]
 
 
-def serve_workspace(experiment,port=0,open_browser=False,input_paths=()):
+def start_workspace_server(experiment,port=0,input_paths=()):
     experiment=Path(experiment).resolve()
     if not (experiment/'EXPERIMENT_LOG.md').is_file() or not (experiment/'ROOT_MEASURER_WORKSPACE.json').is_file():
         raise ValueError('ROOT_MEASURER_WORKSPACE_REQUIRED')
@@ -136,6 +136,7 @@ def serve_workspace(experiment,port=0,open_browser=False,input_paths=()):
         def do_GET(self):
             path=urlsplit(self.path).path
             if path=='/':return self.send_file(PROJECT/'src/model_delivery_workspace.html','text/html; charset=utf-8',replace_token=True)
+            if path=='/desktop':return self.send_file(PROJECT/'src/desktop_home.html','text/html; charset=utf-8',replace_token=True)
             if path=='/model_delivery_viewer.js':return self.send_file(PROJECT/'src/model_delivery_viewer.js','text/javascript; charset=utf-8')
             if path=='/model_delivery_interaction.js':return self.send_file(PROJECT/'src/model_delivery_interaction.js','text/javascript; charset=utf-8')
             if path=='/model_delivery_morphology.js':return self.send_file(PROJECT/'src/model_delivery_morphology.js','text/javascript; charset=utf-8')
@@ -346,12 +347,23 @@ def serve_workspace(experiment,port=0,open_browser=False,input_paths=()):
                     if job['process'].poll() is None and not job['cancel'].exists():
                         write_json(job['cancel'],dict(reason='USER_CANCELLED_FROM_LOCAL_WORKSPACE'))
                     return self.json_response(dict(cancel_requested=True))
+                if self.path=='/api/cancel-all':
+                    count=0
+                    for task in [*jobs.values(),*batches.values()]:
+                        if task['process'].poll() is None and not task['cancel'].exists():
+                            write_json(task['cancel'],dict(reason='USER_CLOSED_DESKTOP_WINDOW'));count+=1
+                    return self.json_response(dict(cancelled=count))
                 self.send_error(404)
             except (ValueError,KeyError,RuntimeError,OSError) as exc:
                 self.json_response(dict(error=str(exc)),400)
         def log_message(self,*_):pass
     server=ThreadingHTTPServer(('127.0.0.1',port),Handler)
     url='http://127.0.0.1:%d/'%server.server_address[1]
+    return server,url,token
+
+
+def serve_workspace(experiment,port=0,open_browser=False,input_paths=()):
+    server,url,_=start_workspace_server(experiment,port,input_paths)
     print(url,flush=True)
     if open_browser:
         import webbrowser

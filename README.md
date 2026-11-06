@@ -34,6 +34,15 @@ root-measurer gui --workspace runs/demo_workspace --input runs/demo_inputs/strai
 
 工作台只监听 `127.0.0.1`，默认由系统分配可用端口。命令会打印实际地址。测量进程禁用自身网络连接，浏览器界面通过本机 HTTP 访问。每次运行新建 `run001`、`run002` 等目录；已有结果不覆盖。
 
+## 桌面版（Windows）
+
+在浏览器工作台外提供原生窗口壳：pywebview（WebView2）内嵌本地界面，双击即用、不弹浏览器。
+
+- **免安装便携版**：整个 `Root3DMeasurer` 文件夹拷到任意位置，双击 `Root3DMeasurer.exe`。内嵌独立 Python 运行时，无需安装任何组件（Windows 10/11 自带 WebView2）。结果与日志位于 `%LOCALAPPDATA%\Root3DMeasurer\`（`workspace\` 为默认工作区，`app.log` 为日志）。
+- **简化主页**：`/desktop` 提供步骤化的中文主页（选模型 → 设置 → 测量 → 看结果），支持原生文件对话框、另存为导出、一键生成演示模型；原浏览器工作台保留为「高级模式」。
+- **开发调试**：`python -m pip install -e ".[desktop]"` 后运行 `pythonw -m root_measurer.desktop`（或 `python -m root_measurer.desktop`）。可用 `--workspace`、`--port` 覆盖默认值。
+- **构建**：Windows 上一键 `desktop\build_desktop.bat`（详见 `desktop/` 目录）。桌面壳只调用既有本地服务与 CLI，不改变测量内核的任何行为。
+
 ## 输入
 
 **主要输入：原生实体包。** 选择 `entity_prediction.json` 或所在目录，旁边保留其 SHA 绑定的 NPZ 裁块。支持保存的原始占据/实体化占据及原格距；坐标约定与字段说明见 [输入规范](docs/input_format.md)。不需要把原实体转换成 PLY。

@@ -7,6 +7,8 @@ let viewZoom=1,probeVAO,probeCount=0,surfacePositions,surfaceIndices;
 const scene=$('#scene'),chart=$('#chart');
 const resultBase=new URL('.',window.location.href),apiURL=p=>new URL(p.replace(/^\//,''),resultBase).href;
 const finite=x=>typeof x==='number'&&Number.isFinite(x);
+// Desktop shell: hand attachment downloads to the native save-as dialog; browsers keep the original behavior.
+document.addEventListener('click',event=>{const anchor=event.target.closest('a[href]');if(!anchor)return;const url=new URL(anchor.getAttribute('href'),location.href);if(url.origin!==location.origin)return;if(!(anchor.hasAttribute('download')||url.pathname.includes('/export/')))return;if(window.pywebview&&window.pywebview.api&&window.pywebview.api.save_file){event.preventDefault();window.pywebview.api.save_file(url.pathname+url.search,anchor.download||decodeURIComponent(url.pathname.split('/').pop())||'download');}},true);
 const fmt=x=>finite(x)?x.toPrecision(7):'未测量';
 const pct=x=>finite(x)?(x*100).toFixed(2)+'%':'未评分';
 function shader(kind,source){const s=gl.createShader(kind);gl.shaderSource(s,source);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s));return s;}

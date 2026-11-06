@@ -1,0 +1,31 @@
+根系三维测量器 · 免安装桌面版（Windows）
+==========================================
+
+使用
+----
+1. 把整个 Root3DMeasurer 文件夹拷到任意位置（U 盘、其他电脑均可）。
+2. 双击 Root3DMeasurer.exe。
+3. 按主页四步操作：选择模型 → 测量设置 → 开始测量 → 查看结果。
+
+系统要求：Windows 10/11 64 位（自带 WebView2，无需安装任何组件）。
+本程序不连接网络，所有计算均在本机完成；原实体不会被修改。
+
+结果与日志位置
+--------------
+- 默认工作区：%LOCALAPPDATA%\Root3DMeasurer\workspace
+  （每次测量的结果在 workspace\results\model_delivery_local\runXXX\ 下，不覆盖旧结果）
+- 运行日志：%LOCALAPPDATA%\Root3DMeasurer\app.log
+- 想更换工作区：编辑 %LOCALAPPDATA%\Root3DMeasurer\settings.json，
+  写入 {"workspace": "D:\\我的工作区"} 后重启程序。
+
+提示
+----
+- 没有模型时，点主页的「生成演示模型」先试一遍完整流程。
+- 主页右上角「高级模式」是完整的工作台界面，功能与浏览器版完全一致。
+- 所有导出（CSV/JSON）都会弹出"另存为"对话框，由你选择保存位置。
+- 测量中途直接关闭窗口，正在运行的任务会被自动取消，不会残留后台进程。
+- 如被杀毒软件误报，请把本文件夹加入信任区。
+
+开发者构建
+----------
+仓库内执行 desktop\build_desktop.bat 即可重新生成此文件夹（需 Python 3.11+ 与网络）。

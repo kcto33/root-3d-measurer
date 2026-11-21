@@ -112,9 +112,11 @@ class CubicalSectionMeasurer:
             elif len(owners)>2:
                 nonmanifold.append(owners)
         selected=find(int(hits[0]));ids={i for i in range(len(polygons)) if find(i)==selected}
+        selected_vertices=set(itertools.chain.from_iterable(polygons[i] for i in ids))
+        point_contacts=[i for i in range(len(polygons)) if i not in ids and selected_vertices.intersection(polygons[i])]
         area=math.fsum(areas[i] for i in ids)*self.solid.pitch**2
         boundary_graph=defaultdict(set)
-        bad=any(any(i in ids for i in group) for group in nonmanifold+contact_edges)
+        bad=bool(point_contacts) or any(any(i in ids for i in group) for group in nonmanifold+contact_edges)
         for (a,b),owners in edges.items():
             n=sum(i in ids for i in owners)
             if n==1:
@@ -124,6 +126,7 @@ class CubicalSectionMeasurer:
         result=dict(base,area=area,candidate_cells=len(candidates),polygons=len(polygons),
                     selected_polygons=len(ids),plane_components=components,
                     contact_ambiguity_present=bad,exact_cut_polygons=True,
+                    point_contact_with_unselected_polygons=point_contacts,
                     numerical_plane_tolerance_lattice_units=tol)
         if bad or not boundary_graph or any(len(ns)!=2 for ns in boundary_graph.values()):
             return dict(result,status='NONMANIFOLD_OR_CONTACT_SECTION')

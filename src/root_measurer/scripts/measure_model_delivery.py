@@ -53,7 +53,8 @@ def _supervise_native(args,argv):
                    ['scripts/measure_model_delivery.py','src/root_mesh_delivery_measurement.py','src/root_mesh_resolution.py','src/root_mesh_thinning_storage.py','src/root_mesh_body_index.py','src/root_exact_query_sections.py','src/root_branch_section_measurement.py','src/root_cubical_surface.py','src/root_closed_triangle_voxelization.py','src/root_native_entity_measurement.py',
                     'src/root_model_delivery_exports.py','src/root_reconstruction_measurement.py',
                     'src/root_cubical_graph_quotient.py','src/root_native_junction_fit.py',
-                    'src/root_native_endpoint_retry.py','src/root_native_axis_order.py','src/root_model_parameters.py','src/root_local_network_policy.py']]))
+                    'src/root_native_endpoint_retry.py','src/root_native_axis_order.py','src/root_model_parameters.py','src/root_local_network_policy.py',
+                    'src/root_tube_measurement.py','src/root_sparse_lee.py','src/root_guarded_thinning.py','src/root_sparse_solid_topology.py']]))
     command=[sys.executable,'-B',str(Path(__file__).resolve())]+argv+['--_native-worker']
     started=time.monotonic();peak_ws=peak_private=0;reason=None
     process=subprocess.Popen(command,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,

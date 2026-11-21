@@ -1,7 +1,8 @@
 """One parameter contract for exact input geometry and measured axis samples.
 
 Missing intervals are never filled. Radius statistics describe valid measured
-output arc only; a partial centerline is never relabelled complete model length.
+output arc only; a partial centerline is never relabelled total input-entity
+length. Original biological-root completeness is outside this contract.
 """
 import csv,io,json,math
 from pathlib import Path
@@ -67,9 +68,11 @@ def build_parameters(report,*,solid=None,boundary_face_count=None,mesh=None,morp
         rows.append(dict(parameter=key,label=label,value=value,unit='count' if dimension==0 else unit if dimension==1 else unit+'^'+str(dimension),
             status=status,covered_arc_fraction=coverage_fraction,definition=definition))
     length=coverage['output_total_length']
-    metric('model_length','完整几何轴长度',None if blocked else length*factor,1,
-        'BLOCKED' if blocked else 'GEOMETRIC_ESTIMATE_ACCURACY_SEPARATE','unique final graph edges; all geometric endpoints resolved and no isolated components required')
-    metric('extracted_axis_length','已提取唯一轴长',length*factor,1,'PARTIAL' if blocked else 'AVAILABLE','unique final graph edges; not a biological root-to-tip cumulative length')
+    metric('model_length','输入实体几何轴总长',None if blocked else length*factor,1,
+        'BLOCKED' if blocked else 'GEOMETRIC_ESTIMATE_ACCURACY_SEPARATE',
+        'unique final graph edges of the supplied finite entity; all geometric endpoints resolved and no isolated components required; does not assess original-root completeness')
+    metric('extracted_axis_length','输入实体已提取轴长',length*factor,1,'PARTIAL' if blocked else 'AVAILABLE',
+        'unique final graph edges of the supplied finite entity; PARTIAL concerns measurement coverage of this input, not missing biological roots')
     for key,label in [('mean','弧长加权平均半径'),('minimum','最小实测半径'),('maximum','最大实测半径'),('median','弧长加权半径中位数'),('p95','弧长加权半径95分位')]:
         metric('radius_'+key,label,radius_display[key],1,'CONDITIONAL_VALID_ARC' if radii['valid_arc_fraction']!=1 else 'AVAILABLE',
             'area-equivalent radius of unchanged original-entity sections; valid measured output arc only',radii['valid_arc_fraction'])
@@ -105,6 +108,10 @@ def build_parameters(report,*,solid=None,boundary_face_count=None,mesh=None,morp
         physical_scale_supplied=scale is not None,scale_mm_per_model_unit=scale,
         geometry=geometry,radius_model_units=radii,connected_section_radius_model_units=connected,coverage=coverage,length_state=state,
         complete_model_length_available=not blocked,metrics=rows,paths=per_path,
+        measurement_scope=dict(object='supplied_finite_entity',entity_cleanup_responsibility='upstream_entity_generation',
+            input_entity_modified_by_measurer=False,original_root_completeness_assessed=False,
+            length_availability='measurement coverage of supplied input components and geometric endpoints only',
+            unavailable_fields='explicit computation or input-geometry limitations; not a biological incompleteness verdict'),
         reference_precision_separate=True,source_geometry_unchanged=True,
         measured_radius_scope='valid output arc; not complete-reference radius coverage')
 

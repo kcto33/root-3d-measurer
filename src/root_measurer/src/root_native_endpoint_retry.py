@@ -4,6 +4,11 @@ import numpy as np
 from root_graph_measurement_ledger import graph_measurement_ledger
 from root_section_centroid import _covered
 
+# Use the same bounded local search as the general terminal trace. The old
+# central-only 2h cap rejected stable, source-owned boundary patches while its
+# four challenges were already allowed to search to 4h. Stability remains h.
+LOCAL_BOUNDARY_EXIT_PITCHES = 4
+
 
 def retry_short_boundary(solid,points,adj,records,ownership):
     """Admit a local first boundary of the fixed graph-end direction.
@@ -36,7 +41,7 @@ def retry_short_boundary(solid,points,adj,records,ownership):
                 continue
             end=np.asarray(ray['boundary_point'],float)
             failures=[]
-            if ray['boundary_distance']>(2 if at==0 else 4)*h:
+            if ray['boundary_distance']>LOCAL_BOUNDARY_EXIT_PITCHES*h:
                 failures.append('SHORT_ENDPOINT_EXIT_NOT_LOCAL')
             supported=bool(_covered(solid.cells,h,q,end))
             if not supported:failures.append('SHORT_ENDPOINT_EXIT_OUTSIDE_SOURCE')
@@ -53,7 +58,8 @@ def retry_short_boundary(solid,points,adj,records,ownership):
             boundary_spread=spread,native_pitch=h,stability_not_accuracy_certificate=True,
             all_five_fixed_directions_evaluated=True,
             spread_pass=spread is not None and spread<=h,
-            thresholds=dict(central_exit_pitches=2,challenge_exit_pitches=4,spread_pitches=1,
+            thresholds=dict(central_exit_pitches=LOCAL_BOUNDARY_EXIT_PITCHES,
+                            challenge_exit_pitches=LOCAL_BOUNDARY_EXIT_PITCHES,spread_pitches=1,
                             branch_max_pitches=12,owner_witnesses_per_ray=11))
         if refusal:continue
         end=probes[0]['ray']['boundary_point']

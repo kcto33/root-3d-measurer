@@ -519,11 +519,12 @@ def measure_native(entity, output, *, stage='regularized_negative_indices',
     provenance = dict(mode='fresh',backend=backend,requested_backend=requested_backend,
                       execution_network_policy=network_policy_state(),
                       graph_policy='native_cube_h1_quotient_junction_ports_v002',
-                      endpoint_policy='owned_trace_interior_and_short_boundary_challenge_v003',
+                      endpoint_policy='owned_trace_interior_and_short_boundary_challenge_v004',
                       implementation_sources=[file_reference(Path(__file__).with_name(name),WORKSPACE) for name in
                           ['root_native_entity_measurement.py','root_cubical_graph_quotient.py',
                            'root_native_junction_fit.py','root_native_endpoint_retry.py','root_native_axis_order.py',
-                           'root_local_network_policy.py','root_cubical_sections.py','root_section_centroid.py']],
+                           'root_local_network_policy.py','root_cubical_sections.py','root_section_centroid.py',
+                           'root_tube_measurement.py','root_sparse_lee.py','root_guarded_thinning.py','root_sparse_solid_topology.py']],
                       fresh_automatic_measurement=True,
                       input_graph_or_GT_used=False,ply_revoxelization_performed=False)
     provenance['algorithm_axis_order']=list(_axis_order)

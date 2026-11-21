@@ -126,3 +126,14 @@ def morphology(measurement, *, vertical_axis="z", down_sign=-1):
     if file_reference(measured) != before:
         raise ValueError("MEASUREMENT_CHANGED")
     return dict(value, measurement=before, source_binding=report.get("entity_binding") or report.get("input_file_binding"))
+
+
+def phenotype(measurement, *, options=None, annotation_profile=None):
+    """Analyze distributions/annotated root axes without changing source geometry.
+
+    Linear settings use mm when the measurement is calibrated, otherwise model
+    units. Imported annotation profiles must match the measurement SHA256.
+    """
+    activate()
+    from root_model_phenotyping import analyze_measurement
+    return analyze_measurement(measurement, options=options, annotation_profile=annotation_profile)

@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 from root_graph_measurement_ledger import graph_measurement_ledger
 
-KERNEL_SHA='399def4141b43d5d46e08373606c8d5bcfdf3da4ec8b6c341998265884f607ce'
+KERNEL_SHA='471bd4baf1cacd573103eeb7842d41ab9009556f3108cbcbcc2a6653534c3a12'
 
 
 def _moments(polygons,ids,point,normal,basis,pitch):

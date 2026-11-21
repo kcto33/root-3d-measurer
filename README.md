@@ -2,7 +2,9 @@
 
 在本机输入三维根系实体，输出唯一中心线总长、分支路径长度、沿线截面等效半径/直径、体积、边界面积和包围盒。浏览器中可点选端点分支、在同一分支选择两点、描绘有序相连根段，以及在连续轴位置现场查询原实体截面。
 
-本仓库是独立迭代的工具。运行不需要原研究项目、历史实验目录、数据集、GPU、云账户或外部网络服务。当前版本为 `0.2.0`，既有数值内核保留可追溯来源；便携运行层和公共 API 单独维护。
+本仓库是独立迭代的工具。运行不需要原研究项目、历史实验目录、数据集、GPU、云账户或外部网络服务。当前版本为 `0.3.2`，既有数值内核保留可追溯来源；便携运行层和公共 API 单独维护。
+
+大型连通原生实体使用占据邻接存储执行相同Lee细化顺序与判据，避免分配整个空白包围盒；小实体保留原稠密实现。原始格距、材料、图解释、截面及端点规则不变，资源上限按实际分配核验。完整参考与测量精度仍独立评价，计算可运行不等于全部字段精度合格。
 
 ## 安装
 
@@ -38,6 +40,8 @@ root-measurer gui --workspace runs/demo_workspace --input runs/demo_inputs/strai
 
 **主要输入：原生实体包。** 选择 `entity_prediction.json` 或所在目录，旁边保留其 SHA 绑定的 NPZ 裁块。支持保存的原始占据/实体化占据及原格距；坐标约定与字段说明见 [输入规范](docs/input_format.md)。不需要把原实体转换成 PLY。
 
+实体化阶段负责统一清理伪影、空腔、碎片、薄片和异常连接，确定最终测量对象。测量器只计算该输入实体的参数，不推测真实根系是否完整。轴长的可用状态表示算法对当前输入的计算覆盖；未解轴段或截面按字段报告，参见[职责与输出范围](docs/input_format.md#实体化与测量的职责)。
+
 **兼容输入：闭合三角网格 PLY。** 使用 `measure model.ply --mesh-target-pitch ... --mesh-target-reason "依据输入特征尺度"`。原三角面用于半径截面，派生占据仅用于轴提取。分辨率和相位挑战未通过时明确阻塞；没有宣称所有外部 PLY 均能完整测量。
 
 ## 批量测量
@@ -68,6 +72,34 @@ root-measurer morphology runs/demo_workspace/results/model_delivery_local/run001
 ```
 
 Python：`from root_measurer import morphology`，再调用 `morphology(measurement_path, vertical_axis="z", down_sign=-1)`。原参数JSON/CSV记录测量时方向；结果页的“形态指标CSV／完整JSON／深度分布CSV”使用当前页面所选方向。批量汇总增加主要形态列、单位、方向和每项资格状态。
+
+## 根系表型与根轴标注
+
+对已有测量增加以下六组参数；无需重新提取轴。默认沿用已记录的物理尺度，未标定时明确使用模型坐标单位。
+
+| 参数组 | 新增结果 |
+| --- | --- |
+| 直径分级 | 各直径区间的根长、比例、有效覆盖率及直径×深度分布 |
+| 根轴与根序 | 指定根基、检查分叉续接，形成连续根轴与母侧根关系；按人工根类型、发育级次和逐边Strahler序汇总 |
+| 侧根配置 | 侧根数、全母根/分枝区两种密度、沿母根的分枝间距、首次分枝距离和未分枝区 |
+| 角度 | 局部母侧根夹角、整轴PCA夹角、整轴相对向下方向的生长角 |
+| 沿轴粗度 | 直径曲线、带覆盖率的渐细回归、避开分叉的母侧根直径比 |
+| 空间分布 | 无向根段倾角/朝向、深度×朝向，以及相对显式参考点的位置方位、深度×位置方位与水平径向根长 |
+
+工作台结果页新增“根系表型与根轴标注”：先查看几何分布，再点选或输入根基节点，核对续接和根尖/截断端，最后确认相应分量。可以修改分箱与物理窗口、在模型上高亮根轴、导入标注、导出JSON/CSV及保存分析。重新打开结果时恢复最近一次与原测量SHA匹配的已保存标注。
+
+**自动续接只提供候选。** 对称分叉等未决关系保持不可用；闭环和分离分量保留原状。人工确认表达根轴身份判断，独立精度验收另行记录。直径只使用合格单分支半径，混合/带孔/缺失截面不补值。各分布保留未分配弧长及完整分母。
+
+```powershell
+# 先计算无需根轴身份的分布，全部文件另存。
+root-measurer phenotype runs/demo_workspace/results/model_delivery_local/run001/model_measurement.json --output runs/demo_workspace/traits/first
+# 在结果页或图导出中核对节点后指定根基；0仅为示例。
+root-measurer phenotype runs/demo_workspace/results/model_delivery_local/run001/model_measurement.json --root-base 0 --output runs/demo_workspace/traits/rooted
+```
+
+Python入口：`from root_measurer import phenotype`，调用 `phenotype(measurement_path, options={...}, annotation_profile=...)`。标注可省略，或传入导出的标注JSON路径/字典。CLI和工作台每次保存完整分析、标注配置以及分布、根轴、母侧根关系、沿线粗度、分组汇总五类CSV，共七个文件；已有文件拒绝覆盖。
+
+定义、分母、单位、标注格式和论文依据见 [表型分析说明](docs/phenotyping.md)。当前范围不包括需要干质量的SRL/SRA/RTD、原位土体距离场、时间序列生长以及玉米节根轮层；也不从几何直接推断吸水或养分获取效率。
 
 ## 交互和 Python API
 
@@ -114,3 +146,5 @@ python -m build
 公共接口位于 `src/root_measurer/api.py`、`cli.py` 和 `runtime.py`。现有内核的文件身份/源码读取机制保留在包内 `src/`、`scripts/`，属于内部实现。源码及网页资源都进入 wheel，安装后无需原仓库。来源映射见 [source_provenance.json](docs/source_provenance.json)。
 
 首版迭代任务见 [路线图](docs/roadmap.md) 和 [变更记录](CHANGELOG.md)。仓库当前为私有，尚未选择开源许可证。
+
+- 2026-10-31测量资格修复：[报告](../../ROOTRAW/root_3dgs_skeleton_phenotyping/experiments/root_nbv_terminal_phenotype_admission_20261008/analysis/terminal_entity_measurement_repair_run001/repair_report.md)；10个新实体空腔均0，完整轴0/10，W3/W4 NO_GO；历史数据/注册表保留。

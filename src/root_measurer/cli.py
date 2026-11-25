@@ -25,6 +25,7 @@ def parser():
     one.add_argument("--workspace", type=Path, default=Path("runs/default"))
     one.add_argument("--scale-mm", type=float)
     one.add_argument("--max-memory-mb", type=int, default=8192)
+    one.add_argument("--section-workers", type=int, default=1, help="独立截面查询进程数（默认 1）")
     one.add_argument("--mesh-target-pitch", type=float)
     one.add_argument("--mesh-target-reason", default="")
     batch = commands.add_parser("batch", help="按清单顺序批量测量原生实体")
@@ -32,6 +33,7 @@ def parser():
     batch.add_argument("--workspace", type=Path, default=Path("runs/default"))
     batch.add_argument("--scale-mm", type=float)
     batch.add_argument("--max-memory-mb", type=int, default=8192)
+    batch.add_argument("--section-workers", type=int, default=1, help="独立截面查询进程数（默认 1）")
     demo = commands.add_parser("demo", help="现场生成小型合成实体；无需下载数据")
     demo.add_argument("--output", type=Path, required=True)
     demo.add_argument("--case", choices=["straight", "curve", "branching_y", "loop"], default="straight")
@@ -85,9 +87,12 @@ def main(argv=None):
         elif args.command == "measure":
             result = measure(args.model, workspace=args.workspace, scale_mm=args.scale_mm,
                 max_memory_mb=args.max_memory_mb, mesh_target_pitch=args.mesh_target_pitch,
-                mesh_target_reason=args.mesh_target_reason, vertical_axis=args.vertical_axis, down_sign=args.down_sign)
+                mesh_target_reason=args.mesh_target_reason, vertical_axis=args.vertical_axis,
+                down_sign=args.down_sign, section_workers=args.section_workers)
             print(json.dumps({"prefix": str(result.prefix), "parameters": result.parameters}, ensure_ascii=False))
         elif args.command == "batch":
+            if isinstance(args.section_workers, bool) or not isinstance(args.section_workers, int) or args.section_workers < 1:
+                raise ValueError("POSITIVE_SECTION_WORKERS_REQUIRED")
             root = initialize_workspace(args.workspace)
             base = root / "results/model_delivery_local"
             number = 1
@@ -95,7 +100,8 @@ def main(argv=None):
                 number += 1
             cmd = [sys.executable, "-B", str(script("measure_model_batch.py")), "--manifest",
                    str(args.manifest.resolve()), "--output-dir", str(base / f"run{number:03d}"),
-                   "--max-memory-mb", str(args.max_memory_mb), "--vertical-axis", args.vertical_axis, "--down-sign", str(args.down_sign)]
+                   "--max-memory-mb", str(args.max_memory_mb), "--section-workers", str(args.section_workers),
+                   "--vertical-axis", args.vertical_axis, "--down-sign", str(args.down_sign)]
             if args.scale_mm is not None:
                 cmd += ["--scale-mm", str(args.scale_mm)]
             return subprocess.call(cmd, env=dict(os.environ, PYTHONUTF8="1", PYTHONDONTWRITEBYTECODE="1"))

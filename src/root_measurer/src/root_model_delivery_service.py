@@ -21,6 +21,14 @@ from root_model_delivery_reconstruction import reconstruction_comparison,reconst
 PROJECT=Path(__file__).resolve().parents[1]
 
 
+def _parse_section_workers(raw):
+    if raw is None:
+        return 1
+    if isinstance(raw,bool) or not isinstance(raw,int) or raw<1:
+        raise ValueError('POSITIVE_SECTION_WORKERS_REQUIRED')
+    return raw
+
+
 def serve_workspace(experiment,port=0,open_browser=False,input_paths=()):
     experiment=Path(experiment).resolve()
     if not (experiment/'EXPERIMENT_LOG.md').is_file() or not (experiment/'ROOT_MEASURER_WORKSPACE.json').is_file():
@@ -336,6 +344,7 @@ def serve_workspace(experiment,port=0,open_browser=False,input_paths=()):
                         if len(set(sources))!=len(sources):raise ValueError('DUPLICATE_BATCH_INPUT')
                         scale=data.get('scale_mm')
                         if scale is not None and (isinstance(scale,bool) or not math.isfinite(float(scale)) or float(scale)<=0):raise ValueError('POSITIVE_MM_SCALE_REQUIRED')
+                        workers=_parse_section_workers(data.get('section_workers'))
                         key=secrets.token_hex(8);registered=experiment/'snapshot/batch_requests';registered.mkdir(exist_ok=True)
                         manifest=registered/(key+'.json');cancel=registered/(key+'_cancel.json')
                         run=1
@@ -347,7 +356,7 @@ def serve_workspace(experiment,port=0,open_browser=False,input_paths=()):
                         from root_model_morphology import settings
                         orientation=settings({k:data[k] for k in ['vertical_axis','down_sign'] if k in data})
                         cmd=[sys.executable,'-B',str(PROJECT/'scripts/measure_model_batch.py'),'--manifest',str(manifest),'--output-dir',str(folder),'--cancel-file',str(cancel),
-                             '--vertical-axis',orientation['vertical_axis'],'--down-sign',str(orientation['down_sign'])]
+                             '--section-workers',str(workers),'--vertical-axis',orientation['vertical_axis'],'--down-sign',str(orientation['down_sign'])]
                         if scale is not None:cmd+=['--scale-mm',str(float(scale))]
                         with (base/('workspace_batch_'+key+'.log')).open('x',encoding='utf-8') as log:
                             process=subprocess.Popen(cmd,stdout=log,stderr=subprocess.STDOUT,
@@ -364,6 +373,7 @@ def serve_workspace(experiment,port=0,open_browser=False,input_paths=()):
                         scale=data.get('scale_mm')
                         if scale is not None and (isinstance(scale,bool) or not math.isfinite(float(scale)) or float(scale)<=0):
                             raise ValueError('POSITIVE_MM_SCALE_REQUIRED')
+                        workers=_parse_section_workers(data.get('section_workers'))
                         target=data.get('mesh_target_pitch');reason=data.get('mesh_target_reason','')
                         if entity.get('input_kind')=='triangle_ply':
                             if target is not None and (isinstance(target,bool) or not math.isfinite(float(target)) or float(target)<=0):raise ValueError('POSITIVE_INPUT_DERIVED_TARGET_PITCH_REQUIRED')
@@ -375,7 +385,7 @@ def serve_workspace(experiment,port=0,open_browser=False,input_paths=()):
                         prefix=folder/(name+'_fresh');cancel=folder/'cancel.json'
                         cmd=[sys.executable,'-B',str(PROJECT/'scripts/measure_model_delivery.py'),
                              '--mesh' if entity.get('input_kind')=='triangle_ply' else '--entity',entity['path'],'--output-prefix',str(prefix),
-                             '--native-backend','auto','--cancel-file',str(cancel),
+                             '--native-backend','auto','--section-workers',str(workers),'--cancel-file',str(cancel),
                              '--vertical-axis',orientation['vertical_axis'],'--down-sign',str(orientation['down_sign'])]
                         if entity.get('input_kind')=='triangle_ply':
                             cmd+=['--mesh-workflow','--mesh-target-reason',reason]

@@ -9,7 +9,9 @@ from root_model_delivery_exports import file_reference,write_json,local_date
 MORPH_KEYS=['fractal_dimension_3d','root_depth','horizontal_spread','convex_hull_volume','volume_solidity','hull_length_density','branching_density','tortuosity_mean','inclination_mean','axis_depth_d50','axis_depth_d95']
 
 
-def run(inputs,folder,scale=None,max_memory_mb=8192,cancel_file=None,vertical_axis='z',down_sign=-1):
+def run(inputs,folder,scale=None,max_memory_mb=8192,cancel_file=None,vertical_axis='z',down_sign=-1,section_workers=1):
+    if isinstance(section_workers,bool) or not isinstance(section_workers,int) or section_workers<1:
+        raise ValueError('POSITIVE_SECTION_WORKERS_REQUIRED')
     from root_model_morphology import settings
     settings(dict(vertical_axis=vertical_axis,down_sign=down_sign))
     folder=Path(folder).resolve()
@@ -19,7 +21,7 @@ def run(inputs,folder,scale=None,max_memory_mb=8192,cancel_file=None,vertical_ax
     experiment=folder.parents[2];records=[]
     with (experiment/'EXPERIMENT_LOG.md').open('a',encoding='utf-8') as f:
         f.write('\n'+local_date()+' PRELOG sequential native batch '+folder.relative_to(experiment).as_posix()+
-                ': '+json.dumps(dict(inputs=[str(v) for v in inputs],scale=scale,memory_mb=max_memory_mb))+
+                ': '+json.dumps(dict(inputs=[str(v) for v in inputs],scale=scale,memory_mb=max_memory_mb,section_workers=section_workers))+
                 '; per-model supervision, measurements, exports and full batch denominator retained.\n')
     for i,path in enumerate(inputs):
         source=Path(path).resolve();prefix=folder/f'case{i:03d}'
@@ -28,7 +30,8 @@ def run(inputs,folder,scale=None,max_memory_mb=8192,cancel_file=None,vertical_ax
                                 complete_length=False,radius_valid_arc_fraction=None,status='CANCELLED_BEFORE_START'))
             continue
         command=[sys.executable,'-B',str(P/'scripts/measure_model_delivery.py'),'--entity',str(source),
-                 '--output-prefix',str(prefix),'--max-memory-mb',str(max_memory_mb),'--vertical-axis',vertical_axis,'--down-sign',str(down_sign)]
+                 '--output-prefix',str(prefix),'--max-memory-mb',str(max_memory_mb),
+                 '--section-workers',str(section_workers),'--vertical-axis',vertical_axis,'--down-sign',str(down_sign)]
         if cancel_file:command+=['--cancel-file',str(cancel_file)]
         if scale is not None:command+=['--scale-mm',str(scale)]
         event=dict(index=i,total=len(inputs),input=str(source),phase='measurement')
@@ -68,7 +71,8 @@ if __name__=='__main__':
     ap=argparse.ArgumentParser();ap.add_argument('--manifest',type=Path,required=True)
     ap.add_argument('--output-dir',type=Path,required=True);ap.add_argument('--scale-mm',type=float)
     ap.add_argument('--vertical-axis',choices=['x','y','z'],default='z');ap.add_argument('--down-sign',type=int,choices=[-1,1],default=-1)
-    ap.add_argument('--max-memory-mb',type=int,default=8192);ap.add_argument('--cancel-file',type=Path);a=ap.parse_args()
+    ap.add_argument('--max-memory-mb',type=int,default=8192);ap.add_argument('--section-workers',type=int,default=1)
+    ap.add_argument('--cancel-file',type=Path);a=ap.parse_args()
     value=json.loads(a.manifest.read_text(encoding='utf-8'));inputs=value['inputs']
     if not inputs or len(inputs)>1000:raise ValueError('BATCH_SIZE_1_TO_1000_REQUIRED')
-    run([a.manifest.resolve().parent/path for path in inputs],a.output_dir,a.scale_mm,a.max_memory_mb,a.cancel_file,a.vertical_axis,a.down_sign)
+    run([a.manifest.resolve().parent/path for path in inputs],a.output_dir,a.scale_mm,a.max_memory_mb,a.cancel_file,a.vertical_axis,a.down_sign,a.section_workers)

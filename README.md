@@ -2,7 +2,9 @@
 
 在本机输入三维根系实体，输出唯一中心线总长、分支路径长度、沿线截面等效半径/直径、体积、边界面积和包围盒。浏览器中可点选端点分支、在同一分支选择两点、描绘有序相连根段，以及在连续轴位置现场查询原实体截面。
 
-本仓库是独立迭代的工具。运行不需要原研究项目、历史实验目录、数据集、GPU、云账户或外部网络服务。当前版本为 `0.3.1`，既有数值内核保留可追溯来源；便携运行层和公共 API 单独维护。
+本仓库是独立迭代的工具。运行不需要原研究项目、历史实验目录、数据集、GPU、云账户或外部网络服务。当前版本为 `0.3.2`，既有数值内核保留可追溯来源；便携运行层和公共 API 单独维护。
+
+大型连通原生实体使用占据邻接存储执行相同Lee细化顺序与判据，避免分配整个空白包围盒；小实体保留原稠密实现。原始格距、材料、图解释、截面及端点规则不变，资源上限按实际分配核验。完整参考与测量精度仍独立评价，计算可运行不等于全部字段精度合格。
 
 ## 安装
 
@@ -25,8 +27,8 @@ Linux/macOS 使用 `source .venv/bin/activate`。依赖为 NumPy、SciPy、sciki
 # 生成一根可重复的小型合成直根；不是独立验收集。
 root-measurer demo --output runs/demo_inputs --case straight
 
-# 测量。尺度由用户确认；留空时全部使用模型单位。
-root-measurer measure runs/demo_inputs/straight --workspace runs/demo_workspace --scale-mm 100
+# 测量。尺度由用户确认；留空时全部使用模型单位。大实体可用 --section-workers N 启用多进程截面查询（结果与单进程严格一致）。
+root-measurer measure runs/demo_inputs/straight --workspace runs/demo_workspace --scale-mm 100 --section-workers 1
 
 # 浏览器工作台；输入/输出目录均由用户指定，安装目录不保存运行结果。
 root-measurer gui --workspace runs/demo_workspace --input runs/demo_inputs/straight --open-browser
@@ -37,6 +39,8 @@ root-measurer gui --workspace runs/demo_workspace --input runs/demo_inputs/strai
 ## 输入
 
 **主要输入：原生实体包。** 选择 `entity_prediction.json` 或所在目录，旁边保留其 SHA 绑定的 NPZ 裁块。支持保存的原始占据/实体化占据及原格距；坐标约定与字段说明见 [输入规范](docs/input_format.md)。不需要把原实体转换成 PLY。
+
+实体化阶段负责统一清理伪影、空腔、碎片、薄片和异常连接，确定最终测量对象。测量器只计算该输入实体的参数，不推测真实根系是否完整。轴长的可用状态表示算法对当前输入的计算覆盖；未解轴段或截面按字段报告，参见[职责与输出范围](docs/input_format.md#实体化与测量的职责)。
 
 **兼容输入：闭合三角网格 PLY。** 使用 `measure model.ply --mesh-target-pitch ... --mesh-target-reason "依据输入特征尺度"`。原三角面用于半径截面，派生占据仅用于轴提取。分辨率和相位挑战未通过时明确阻塞；没有宣称所有外部 PLY 均能完整测量。
 

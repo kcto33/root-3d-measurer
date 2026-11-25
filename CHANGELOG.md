@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.2 — 2026-11-26
+
+- Added occupied-neighbor storage for large connected native solids, preserving Lee 0.26 directional/candidate/recheck order and the existing whole-missing-component recovery.
+- Retained dense storage for admitted small components and separated disconnected-solid bounded domains (preserving every source cell and the 350M per-component guard), keeping native pitch/material, graph, endpoint and section measurement definitions unchanged.
+- Exact global sparse cavity accounting now uses actual occupied/interval storage limits instead of rejecting an unallocated empty component box.
+- Added optional multi-process plane section queries (`--section-workers`, default `1`) across CLI (`measure`/`batch`), Python API, batch runner and local web workspace, preserving exact serial section order and values.
+- Added raw/guarded estimator, axis-order/full-kernel equality, large-empty-domain, component memory, point-contact, short-endpoint and worker-passthrough checks.
+
 ## 0.3.1 — 2026-10-29
 
 - Recovered root-relative bridge-fragment analysis in cyclic components with an explicit root, preserving every original cyclic edge and the exact unique-edge length ledger.

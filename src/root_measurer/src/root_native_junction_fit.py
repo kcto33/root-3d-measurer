@@ -10,12 +10,28 @@ from root_section_centroid import _covered
 METHOD='source_owned_port_line_intersection_v001'
 
 
-def correct_junctions(solid,graph,progress=None):
+def correct_junctions(solid,graph,progress=None,section_workers=1):
     from root_native_entity_measurement import NativeSectionIndex,axis_aligned_section,_tangent
     points=np.asarray(graph['points'],float);adj=graph['adjacency'];h=solid.pitch
     ledger=graph_measurement_ledger(points,adj,coordinate_units='model_units')
-    ownership=BranchOwnership(points,adj);engine=NativeSectionIndex(solid,interior_boundary_section_class());slabs={}
-    occupied=set(map(tuple,solid.cells));ports={i:[] for i,a in enumerate(adj) if len(a)>=3}
+    ownership=BranchOwnership(points,adj)
+    occupied=solid.occupied;ports={i:[] for i,a in enumerate(adj) if len(a)>=3}
+    from root_native_section_workers import sections
+    queries=[]
+    for branch in ledger['branches']:
+        if branch['closed']:continue
+        ids=branch['source_node_ids'];path=points[ids]
+        arc=np.r_[0,np.cumsum(np.linalg.norm(np.diff(path,axis=0),axis=1))]
+        for end,reverse in [(ids[0],False),(ids[-1],True)]:
+            if end not in ports:continue
+            q=path[::-1] if reverse else path;s=arc[-1]-arc[::-1] if reverse else arc
+            maximum=min(20*h,.4*float(s[-1]))
+            if maximum>3*h:
+                for at in np.linspace(3*h,maximum,12):
+                    pos=np.array([np.interp(at,s,q[:,a]) for a in range(3)])
+                    normal=_tangent(q,s,float(at),h,False)
+                    if normal is not None:queries.append((pos,normal))
+    cuts=iter(sections(solid,queries,section_workers))
     paths={}
     for branch in ledger['branches']:
         ids=branch['source_node_ids'];path=points[ids];arc=np.r_[0,np.cumsum(np.linalg.norm(np.diff(path,axis=0),axis=1))]
@@ -30,8 +46,7 @@ def correct_junctions(solid,graph,progress=None):
                     pos=np.array([np.interp(at,s,q[:,a]) for a in range(3)])
                     normal=_tangent(q,s,float(at),h,False)
                     if normal is None:continue
-                    section=axis_aligned_section(solid,pos,normal,slabs)
-                    if section is None:section=engine.section(pos,normal)
+                    section=next(cuts)
                     ev=section.get('section_centroid_evidence')
                     if section.get('radius') is None or ev is None:continue
                     if any(ownership.nearest_owners(w)!={branch['branch_id']} for w in ev['_interior_polygon_witnesses']):continue

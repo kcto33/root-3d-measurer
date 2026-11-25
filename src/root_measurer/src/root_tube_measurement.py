@@ -13,11 +13,38 @@ def measure_tube_solid(solid,*,max_dense_cells=64000000):
     cells=solid.cells;h=solid.pitch
     if len(cells):
         lo=cells.min(axis=0)-1;shape=cells.max(axis=0)-lo+2
-        if math.prod(map(int,shape+2))>max_dense_cells:raise ValueError('TUBE_MEASUREMENT_DENSE_GUARD')
-        volume=np.zeros(tuple(shape),bool);volume[tuple((cells-lo).T)]=True
-        thinning={};out=guarded_skeletonize(volume,receipt=thinning,max_dense_cells=max_dense_cells)
-        nodes=np.argwhere(out)+lo
-        del volume,out
+        if math.prod(map(int,shape+2))>max_dense_cells:
+            # Disconnected components have no interacting 3x3x3 neighborhoods.
+            # Empty separation is not a reason to allocate a global dense box.
+            from root_cubical_surface import component_labels
+            count,labels=component_labels(cells);parts=[];audits=[]
+            for component in range(count):
+                part=cells[labels==component];lower=part.min(0)-1
+                extent=part.max(0)-lower+2
+                domain=math.prod(map(int,extent+2))
+                audit={}
+                if domain>max_dense_cells:
+                    from root_sparse_lee import sparse_guarded_lee
+                    out=sparse_guarded_lee(part,receipt=audit,max_dense_cells=max_dense_cells,_verified_connected=True)
+                    parts.append(out);allocated=0
+                else:
+                    volume=np.zeros(tuple(extent),bool);volume[tuple((part-lower).T)]=True
+                    out=guarded_skeletonize(volume,receipt=audit,max_dense_cells=max_dense_cells)
+                    parts.append(np.argwhere(out)+lower);allocated=domain;del volume
+                audits.append(dict(component=component,source_cells=len(part),dense_cells=allocated,domain_cells=domain,audit=audit))
+                del out
+            nodes=np.concatenate(parts);nodes=nodes[np.lexsort((nodes[:,2],nodes[:,1],nodes[:,0]))]
+            thinning=dict(status='PASS_NONEMPTY_COMPONENT_MEASUREMENT_GUARD',
+                source_components=count,derived_components=count,source_material_unchanged=True,
+                occupied_material_added=0,components_joined=0,genuine_cycles_forced_to_tree=False,
+                storage='independent26_components_same_guarded_Lee_with_occupied_storage_for_large_connected',global_dense_allocation_avoided=True,
+                global_domain_cells=math.prod(map(int,shape+2)),
+                peak_component_dense_cells=max(a['dense_cells'] for a in audits),component_receipts=audits)
+        else:
+            volume=np.zeros(tuple(shape),bool);volume[tuple((cells-lo).T)]=True
+            thinning={};out=guarded_skeletonize(volume,receipt=thinning,max_dense_cells=max_dense_cells)
+            nodes=np.argwhere(out)+lo
+            del volume,out
         pairs,_=neighbor_graph(nodes);adj=[set() for unused in nodes]
         for i,j in pairs:adj[i].add(int(j));adj[j].add(int(i))
         reduced,reduction=reduce_lattice_graph((nodes+.5)*h,adj,h)

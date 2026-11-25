@@ -46,6 +46,8 @@ def test_unresolved_endpoint_keeps_full_length_blank_in_json_and_csv():
     assert m['extracted_axis_length']['value']==4
     values={row['parameter']:row for row in csv.DictReader(io.StringIO(parameter_csv(p).decode('utf-8-sig')))}
     assert values['model_length']['value']=='' and values['extracted_axis_length']['value']=='4.0'
+    assert not p['measurement_scope']['original_root_completeness_assessed']
+    assert p['measurement_scope']['object']=='supplied_finite_entity'
 
 def test_empty_valid_radius_is_null_not_zero():
     r=report(missing=True);r['radius_curve']['rows'][0].update(radius=None,available=False)
@@ -61,3 +63,17 @@ def test_isolated_component_prevents_complete_length_claim():
 
 def test_weighted_statistics_reject_nonfinite_measured_radius():
     with pytest.raises(ValueError):radius_statistics([dict(arc_weight=1,available=True,radius=float('nan'))])
+
+
+@pytest.mark.parametrize('original_complete',[False,True])
+def test_input_length_does_not_depend_on_original_root_completeness(original_complete):
+    r=report()
+    # The supplied finite segment has its own resolved boundary endpoints.
+    # An external biological completeness assertion must not gate its length.
+    r['original_root_complete']=original_complete
+    p=build_parameters(r)
+    assert p==build_parameters(report())
+    assert p['complete_model_length_available']
+    assert metrics(p)['model_length']['value']==4
+    assert p['measurement_scope']['entity_cleanup_responsibility']=='upstream_entity_generation'
+    assert not p['measurement_scope']['input_entity_modified_by_measurer']

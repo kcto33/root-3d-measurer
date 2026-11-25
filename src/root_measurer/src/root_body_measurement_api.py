@@ -6,7 +6,7 @@ from root_branch_section_measurement import branch_section_centroid_measurement
 from root_axis_radius_profile import axis_radius_profile
 from root_graph_measurement_ledger import graph_measurement_ledger
 from root_measurement_api import _metric
-from root_section_centroid import _covered
+from root_section_centroid import covered_segment
 
 
 def measure_centerline_body(solid,*,coordinate_units,kernel_graph,include_radius_profile=False,
@@ -35,7 +35,7 @@ def measure_centerline_body(solid,*,coordinate_units,kernel_graph,include_radius
         if ledger['measurement_graph_length']!=body['centroid_graph_ledger']['measurement_graph_length']:raise ValueError('BODY_CACHE_LEDGER_MISMATCH')
         for a,b in ledger['source_edge_ids']:
             if np.array_equal(q[a],p[a]) and np.array_equal(q[b],p[b]):continue
-            if not _covered(solid.cells,solid.pitch,q[a],q[b]):raise ValueError('BODY_CHANGED_EDGE_OUTSIDE_SOURCE')
+            if not covered_segment(solid,q[a],q[b]):raise ValueError('BODY_CHANGED_EDGE_OUTSIDE_SOURCE')
         if include_radius_profile:
             profile=frozen_radius_profile if frozen_radius_profile is not None else axis_radius_profile(solid,q,adj)
             if not np.array_equal(np.asarray(profile['points'],float),q) or profile['source_graph_ledger']['source_edge_ids']!=ledger['source_edge_ids']:

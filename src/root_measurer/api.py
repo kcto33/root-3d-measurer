@@ -33,8 +33,11 @@ class Measurement:
 
 
 def measure(model, *, workspace="runs/default", scale_mm=None, max_memory_mb=8192,
-            mesh_target_pitch=None, mesh_target_reason="", vertical_axis="z", down_sign=-1):
+            mesh_target_pitch=None, mesh_target_reason="", vertical_axis="z", down_sign=-1,
+            no_axis_candidate=False, section_workers=1):
     activate()
+    if isinstance(section_workers,bool) or not isinstance(section_workers,int) or section_workers<1:
+        raise ValueError("POSITIVE_SECTION_WORKERS_REQUIRED")
     from root_model_morphology import settings
     settings(dict(vertical_axis=vertical_axis, down_sign=down_sign))
     source = Path(model).expanduser().resolve()
@@ -52,6 +55,8 @@ def measure(model, *, workspace="runs/default", scale_mm=None, max_memory_mb=819
             "--max-memory-mb", str(max_memory_mb), "--vertical-axis", vertical_axis, "--down-sign", str(down_sign)]
     if scale_mm is not None:
         args += ["--scale-mm", str(scale_mm)]
+    args += ["--section-workers", str(section_workers)]
+    if no_axis_candidate:args += ["--no-axis-candidate"]
     if mesh:
         args += ["--mesh-workflow", "--mesh-target-reason", mesh_target_reason]
         if mesh_target_pitch is not None:

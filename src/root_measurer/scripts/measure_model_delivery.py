@@ -53,7 +53,8 @@ def _supervise_native(args,argv):
                    ['scripts/measure_model_delivery.py','src/root_mesh_delivery_measurement.py','src/root_mesh_resolution.py','src/root_mesh_thinning_storage.py','src/root_mesh_body_index.py','src/root_exact_query_sections.py','src/root_branch_section_measurement.py','src/root_cubical_surface.py','src/root_closed_triangle_voxelization.py','src/root_native_entity_measurement.py',
                     'src/root_model_delivery_exports.py','src/root_reconstruction_measurement.py',
                     'src/root_cubical_graph_quotient.py','src/root_native_junction_fit.py',
-                    'src/root_native_endpoint_retry.py','src/root_native_axis_order.py','src/root_model_parameters.py','src/root_local_network_policy.py']]))
+                    'src/root_native_endpoint_retry.py','src/root_native_axis_order.py','src/root_model_parameters.py','src/root_local_network_policy.py',
+                    'src/root_tube_measurement.py','src/root_sparse_lee.py','src/root_guarded_thinning.py','src/root_sparse_solid_topology.py']]))
     command=[sys.executable,'-B',str(Path(__file__).resolve())]+argv+['--_native-worker']
     started=time.monotonic();peak_ws=peak_private=0;reason=None
     process=subprocess.Popen(command,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,
@@ -117,10 +118,13 @@ def main(argv=None):
     ap.add_argument('--inherit-from',type=Path,help='M1 only: SHA-bound prior body/radius witness; reported as inherited')
     ap.add_argument('--resume-axis-from',type=Path,help='Reuse a bound prior automatic native axis and remeasure final sections')
     ap.add_argument('--native-backend',choices=['auto','existing_span','existing_guarded_lee'],default='auto')
+    ap.add_argument('--no-axis-candidate',action='store_true',help='skip the optional fixed120 endpoint candidate')
+    ap.add_argument('--section-workers',type=int,default=1,help='independent plane query processes (default: 1)')
     ap.add_argument('--max-memory-mb',type=int,default=8192)
     ap.add_argument('--cancel-file',type=Path,help=argparse.SUPPRESS)
     ap.add_argument('--_native-worker',action='store_true',help=argparse.SUPPRESS)
     a=ap.parse_args(argv)
+    if a.section_workers<1:ap.error('--section-workers must be positive')
     if a.scale_mm is not None and (not __import__('math').isfinite(a.scale_mm) or a.scale_mm<=0):
         ap.error('positive finite mm scale required')
     if not a.mesh_workflow and (a.mesh_target_pitch is not None or a.mesh_target_reason or a.mesh_resume_target_from is not None):

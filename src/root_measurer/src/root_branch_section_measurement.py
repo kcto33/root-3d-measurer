@@ -32,7 +32,7 @@ class BranchOwnership:
         t=np.zeros(len(ids));positive=denom>0
         t[positive]=np.clip(np.einsum('ij,ij->i',v[positive],self.d[ids][positive])/denom[positive],0,1)
         delta=v-t[:,None]*self.d[ids]
-        return np.array([math.hypot(*row) for row in delta])
+        return np.linalg.norm(delta,axis=1)
 
     def nearest_owners(self,q):
         q=np.asarray(q,float)
@@ -88,17 +88,27 @@ def owned_section_class():
 
 def branch_section_centroid_measurement(solid,points,adjacency,*,progress=None):
     ownership=BranchOwnership(points,adjacency);events=[];p=np.asarray(points,float)
+    node_ids={}
+    for node,point in enumerate(p):node_ids.setdefault(tuple(point),[]).append(node)
     class Engine:
         def __init__(self,source):self.kernel=owned_section_class()(source)
+        def prepare_queries(self,queries):
+            self.results=self.kernel.prepare_queries(queries) if hasattr(self.kernel,'prepare_queries') else None
+        def section_at(self,node,point,normal):
+            return self._section(node,point,normal)
         def section(self,point,normal):
-            result=self.kernel.section(point,normal)
+            matches=node_ids.get(tuple(point),[])
+            return self._section(matches[0] if len(matches)==1 else None,point,normal)
+        def _section(self,node,point,normal):
+            result=(self.results[node] if getattr(self,'results',None) is not None
+                    else self.kernel.section(point,normal))
             evidence=result.get('section_centroid_evidence')
             if evidence is None:return result
             witnesses=evidence.pop('_interior_polygon_witnesses')
-            matches=np.flatnonzero(np.all(p==point,axis=1))
+            matches=node_ids.get(tuple(point),[])
             if len(matches)!=1:
                 result.pop('section_centroid_evidence');return dict(result,status='MISSING_UNIQUE_SOURCE_QUERY_ID',radius=None)
-            node=int(matches[0]);own=ownership.node_branches[node]
+            own=ownership.node_branches[node]
             foreign=[]
             for q in witnesses:
                 nearest=ownership.nearest_owners(q)

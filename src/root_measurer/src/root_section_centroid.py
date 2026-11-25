@@ -5,11 +5,12 @@ import copy
 from functools import lru_cache
 import hashlib
 import math
+from itertools import product
 from pathlib import Path
 import numpy as np
 from root_graph_measurement_ledger import graph_measurement_ledger
 
-KERNEL_SHA='399def4141b43d5d46e08373606c8d5bcfdf3da4ec8b6c341998265884f607ce'
+KERNEL_SHA='471bd4baf1cacd573103eeb7842d41ab9009556f3108cbcbcc2a6653534c3a12'
 
 
 def _moments(polygons,ids,point,normal,basis,pitch):
@@ -99,6 +100,19 @@ def _covered(cells,h,a,b):
     return False
 
 
+def covered_segment(solid, a, b):
+    """Same slab union, restricted to the complete local occupied bounding box."""
+    a=np.asarray(a,float);b=np.asarray(b,float);h=solid.pitch
+    low=np.floor(np.minimum(a,b)/h).astype(int)-1
+    high=np.floor(np.maximum(a,b)/h).astype(int)
+    if math.prod(map(int,high-low+1))<=4096:
+        occupied=solid.occupied
+        cells=np.asarray([p for p in product(*(range(int(x),int(y)+1) for x,y in zip(low,high)))
+                          if p in occupied],np.int64).reshape(-1,3)
+    else:cells=solid.cells
+    return _covered(cells,h,a,b)
+
+
 def section_centroid_measurement(solid,points,adjacency,*,progress=None):
     """Keep ID graph and endpoints; derive transverse section centroids once."""
     p=np.asarray(points,float);base=graph_measurement_ledger(p,adjacency,coordinate_units='caller_solid_units')
@@ -114,12 +128,16 @@ def section_centroid_measurement(solid,points,adjacency,*,progress=None):
             else:normals[node]=direction
     positions=p.copy();radii=[None]*len(p);statuses=[];centroids=[]
     movable={i for i,ns in enumerate(adjacency) if len(ns)==2}
-    occupied=set(map(tuple,solid.cells))
+    occupied=solid.occupied
+    if hasattr(engine,'prepare_queries'):
+        engine.prepare_queries([(i,point,normals[i]) for i,point in enumerate(p)
+                                if i in normals and i not in ambiguous])
     for i,point in enumerate(p):
         direction=normals.get(i)
         if direction is None or i in ambiguous:
             statuses.append('MISSING_UNIQUE_BRANCH_NORMAL');centroids.append(None);continue
-        result=engine.section(point,direction);statuses.append(result['status'])
+        result=(engine.section_at(i,point,direction) if hasattr(engine,'section_at')
+                else engine.section(point,direction));statuses.append(result['status'])
         evidence=result.get('section_centroid_evidence');centroids.append(evidence)
         if evidence is not None:
             radii[i]=result['radius'];candidate=np.array(evidence['centroid'])
@@ -130,7 +148,7 @@ def section_centroid_measurement(solid,points,adjacency,*,progress=None):
         bad=[]
         for a,b in base['source_edge_ids']:
             if np.array_equal(positions[a],p[a]) and np.array_equal(positions[b],p[b]):continue
-            if not _covered(solid.cells,h,positions[a],positions[b]):bad.extend([a,b])
+            if not covered_segment(solid,positions[a],positions[b]):bad.extend([a,b])
         changed={i for i in bad if not np.array_equal(positions[i],p[i])}
         if not changed:break
         for i in changed:positions[i]=p[i]

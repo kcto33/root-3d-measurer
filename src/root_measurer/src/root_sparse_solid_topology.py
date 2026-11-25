@@ -2,7 +2,8 @@
 
 Every empty grid cell in the padded finite domain belongs to one interval.
 Adjacent rows connect iff their integer intervals overlap. This changes only
-storage, not occupancy, adjacency, cavity size or the 350m-cell guard.
+storage, not occupancy, adjacency or cavity size. Existing resource parameters
+bound occupied storage/interval capacity, not an unallocated empty dense box.
 """
 import math
 import numpy as np
@@ -13,6 +14,7 @@ from root_volume_topology import cubical_euler
 
 def sparse_solid_topology(cells, max_domain_cells=350000000, max_intervals=4000000):
     cells=_indices(cells)
+    if len(cells)>max_domain_cells:raise ValueError('SPARSE_TOPOLOGY_OCCUPIED_STORAGE_GUARD')
     counts=cubical_euler(cells)
     if not len(cells):
         return dict(counts,foreground_components=0,enclosed_empty_components=0,tunnel_dimension=0,
@@ -21,7 +23,7 @@ def sparse_solid_topology(cells, max_domain_cells=350000000, max_intervals=40000
                     unknown_as_empty_for_derived_topology=True)
     lo=cells.min(axis=0)-1;shape=cells.max(axis=0)-lo+2
     domain=math.prod(map(int,shape))
-    if domain>max_domain_cells:raise ValueError('SPARSE_TOPOLOGY_DOMAIN_GUARD')
+    if domain>np.iinfo(np.int64).max:raise ValueError('SPARSE_TOPOLOGY_INTEGER_DOMAIN_RANGE')
     axis=int(np.argmax(shape));order=[axis]+[i for i in range(3) if i!=axis]
     xyz=(cells-lo)[:,order];sx,sy,sz=map(int,shape[order])
     capacity=len(cells)+sy*sz+1

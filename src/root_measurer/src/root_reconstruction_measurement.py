@@ -5,6 +5,7 @@ Its quantities describe the reconstructed solid; they are not biological
 centerlines, physical root tips, or an observation-confidence qualification.
 """
 from dataclasses import dataclass
+from functools import cached_property
 from pathlib import Path
 import hashlib
 import json
@@ -47,6 +48,22 @@ class ReconstructedSolid:
             raise ValueError('FINITE_POSITIVE_PITCH_REQUIRED')
         a.setflags(write=False)
         object.__setattr__(self, 'cells', a)
+
+    @cached_property
+    def occupied(self):
+        return {tuple(map(int, c)): i for i, c in enumerate(self.cells)}
+
+    @classmethod
+    def indexed_subset(cls, solid, ordered):
+        """Internal subset of validated cells selected by sorted unique IDs."""
+        result = object.__new__(cls)
+        cells = solid.cells[ordered]
+        cells.setflags(write=False)
+        object.__setattr__(result, 'cells', cells)
+        object.__setattr__(result, 'pitch', solid.pitch)
+        object.__setattr__(result, 'provenance',
+                           dict(query_index_subset=True, source_material_modified=False))
+        return result
 
 
 def load_reconstruction(metadata_path, expected_sha256, cache_paths,
@@ -213,7 +230,7 @@ def cubical_ray_exit(solid, point, direction):
     if not np.isfinite(norm) or norm == 0:
         raise ValueError('NONZERO_RAY_DIRECTION_REQUIRED')
     direction = direction / norm
-    occupied = set(map(tuple, solid.cells))
+    occupied = solid.occupied
     index = np.floor(point).astype(np.int64)
     if tuple(index) not in occupied:
         raise ValueError('RAY_START_NOT_IN_OCCUPIED_CELL')

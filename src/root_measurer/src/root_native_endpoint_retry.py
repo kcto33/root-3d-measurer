@@ -2,7 +2,12 @@
 import math
 import numpy as np
 from root_graph_measurement_ledger import graph_measurement_ledger
-from root_section_centroid import _covered
+from root_section_centroid import covered_segment
+
+# Use the same bounded local search as the general terminal trace. The old
+# central-only 2h cap rejected stable, source-owned boundary patches while its
+# four challenges were already allowed to search to 4h. Stability remains h.
+LOCAL_BOUNDARY_EXIT_PITCHES = 4
 
 
 def retry_short_boundary(solid,points,adj,records,ownership):
@@ -36,9 +41,9 @@ def retry_short_boundary(solid,points,adj,records,ownership):
                 continue
             end=np.asarray(ray['boundary_point'],float)
             failures=[]
-            if ray['boundary_distance']>(2 if at==0 else 4)*h:
+            if ray['boundary_distance']>LOCAL_BOUNDARY_EXIT_PITCHES*h:
                 failures.append('SHORT_ENDPOINT_EXIT_NOT_LOCAL')
-            supported=bool(_covered(solid.cells,h,q,end))
+            supported=bool(covered_segment(solid,q,end))
             if not supported:failures.append('SHORT_ENDPOINT_EXIT_OUTSIDE_SOURCE')
             owners=[sorted(ownership.nearest_owners(q+t*(end-q))) for t in np.linspace(0,.99,11)]
             if any(set(o)!=own for o in owners):
@@ -53,11 +58,12 @@ def retry_short_boundary(solid,points,adj,records,ownership):
             boundary_spread=spread,native_pitch=h,stability_not_accuracy_certificate=True,
             all_five_fixed_directions_evaluated=True,
             spread_pass=spread is not None and spread<=h,
-            thresholds=dict(central_exit_pitches=2,challenge_exit_pitches=4,spread_pitches=1,
+            thresholds=dict(central_exit_pitches=LOCAL_BOUNDARY_EXIT_PITCHES,
+                            challenge_exit_pitches=LOCAL_BOUNDARY_EXIT_PITCHES,spread_pitches=1,
                             branch_max_pitches=12,owner_witnesses_per_ray=11))
         if refusal:continue
         end=probes[0]['ray']['boundary_point']
-        if not _covered(solid.cells,h,np.asarray(points[neighbor]),np.asarray(end)):
+        if not covered_segment(solid,np.asarray(points[neighbor]),np.asarray(end)):
             record['short_boundary_evidence']['refusal']='SHORT_ENDPOINT_CHANGED_EDGE_OUTSIDE_SOURCE';continue
         points[node]=end
         record.update(status='geometric_surface_estimate',initial_failure=record.get('reason'),
@@ -71,8 +77,13 @@ def retry_short_boundary(solid,points,adj,records,ownership):
     return points,adj,records
 
 
-def retry_from_interior(solid,graph,records,ownership):
+def retry_from_interior(solid,graph,records,ownership,*,section_index=None,slab_cache=None):
     from root_native_entity_measurement import geometric_endpoints
+    if section_index is None:
+        from root_native_entity_measurement import NativeSectionIndex
+        from root_cubical_disk_section import interior_boundary_section_class
+        section_index=NativeSectionIndex(solid,interior_boundary_section_class())
+    if slab_cache is None:slab_cache={}
     points=[list(p) for p in graph['points']];adj=[list(a) for a in graph['adjacency']];h=solid.pitch
     before=graph_measurement_ledger(points,adj,coordinate_units='model_units')
     for record in records:
@@ -97,7 +108,8 @@ def retry_from_interior(solid,graph,records,ownership):
             trimmed=[list(a) for a in adj]
             for a,b in zip(ids[:k],ids[1:k+1]):trimmed[a].remove(b);trimmed[b].remove(a)
             proposal,attempts=geometric_endpoints(solid,dict(points=points,adjacency=trimmed),
-                _ownership=ownership,_only_endpoints={ids[k]},_retry=False)
+                _ownership=ownership,_only_endpoints={ids[k]},_retry=False,
+                _section_index=section_index,_slab_cache=slab_cache)
             success=next((r for r in attempts if r['node_id']==ids[k] and r['status']=='geometric_surface_estimate'),None)
             receipt['attempts'].append(dict(anchor_node=ids[k],arc=float(arc[k]),
                 source_trace=next((r for r in attempts if r['node_id']==ids[k]),None)))
@@ -111,7 +123,7 @@ def retry_from_interior(solid,graph,records,ownership):
             if chain[-1]!=target:continue
             q=np.array([proposal['points'][i] for i in chain]);s=np.r_[0,np.cumsum(np.linalg.norm(np.diff(q,axis=0),axis=1))]
             if s[-1]<=0 or np.any(np.diff(s)<=0):continue
-            if not all(_covered(solid.cells,h,a,b) for a,b in zip(q,q[1:])):continue
+            if not all(covered_segment(solid,a,b) for a,b in zip(q,q[1:])):continue
             boundaries=np.linspace(0,float(s[-1]),k+2)
             for at,i in zip(boundaries,ids[:k+2]):points[i]=[float(np.interp(at,s,q[:,a])) for a in range(3)]
             for t,(a,b) in enumerate(zip(ids[:k+1],ids[1:k+2])):

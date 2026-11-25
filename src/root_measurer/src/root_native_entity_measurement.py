@@ -208,7 +208,7 @@ class NativeSectionIndex:
     """Enumerate a complete query-connected plane slab; retain original cut math."""
     def __init__(self,solid,kernel_kind):
         self.solid=solid;self.kernel_kind=kernel_kind
-        self.occupied={tuple(map(int,c)):i for i,c in enumerate(solid.cells)}
+        self.occupied=solid.occupied
         self.steps=list(product((-1,0,1),repeat=3))
         self.maximum=float(np.abs(solid.cells).max()) if len(solid.cells) else 0.
         self.extreme=int(np.argmax(np.max(np.abs(solid.cells),axis=1))) if len(solid.cells) else None
@@ -250,8 +250,7 @@ class NativeSectionIndex:
         ids={self.occupied[key] for key in halo}
         if self.extreme is not None:ids.add(self.extreme)
         ordered=sorted(ids)
-        subset=ReconstructedSolid(self.solid.cells[ordered],self.solid.pitch,
-                                  dict(query_index_subset=True,source_material_modified=False))
+        subset=ReconstructedSolid.indexed_subset(self.solid,ordered)
         result=self.kernel_kind(subset).section(point,normal)
         self.last_stats=dict(source_cells=len(self.solid.cells),selected_cells=len(ordered),
                              plane_component_cells=len(selected),original_tolerance_extremum_retained=True,
@@ -261,12 +260,20 @@ class NativeSectionIndex:
         return result
 
 
-def indexed_body_measurement(solid,points,adjacency,progress=None):
+def indexed_body_measurement(solid,points,adjacency,progress=None,section_workers=1):
     import root_branch_section_measurement as original
     kind=original.owned_section_class()
     class Engine:
-        def __init__(self,source):self.index=NativeSectionIndex(source,kind)
-        def section(self,point,normal):return self.index.section(point,normal)
+        def __init__(self,source):
+            self.source=source;self.index=None;self.slabs={}
+        def prepare_queries(self,queries):
+            from root_native_section_workers import sections
+            values=sections(self.source,[(p,n) for i,p,n in queries],section_workers,'body')
+            return {i:value for (i,p,n),value in zip(queries,values)}
+        def section(self,point,normal):
+            if self.index is None:self.index=NativeSectionIndex(self.source,kind)
+            from root_native_section_workers import section_query
+            return section_query(self.index,point,normal,self.slabs,'body')
     fn=original.branch_section_centroid_measurement
     bound=FunctionType(fn.__code__,dict(fn.__globals__,owned_section_class=lambda:Engine),
                        fn.__name__,fn.__defaults__)
@@ -274,7 +281,8 @@ def indexed_body_measurement(solid,points,adjacency,progress=None):
     return bound(solid,points,adjacency,progress=progress)
 
 
-def geometric_endpoints(solid,graph,*,_ownership=None,_only_endpoints=None,_retry=True):
+def geometric_endpoints(solid,graph,*,_ownership=None,_only_endpoints=None,_retry=True,
+                        _section_index=None,_slab_cache=None):
     """Trace supported section centroids to finite model ends, never living tips."""
     from root_reconstruction_measurement import cubical_ray_exit
     from root_section_centroid import _covered
@@ -283,9 +291,10 @@ def geometric_endpoints(solid,graph,*,_ownership=None,_only_endpoints=None,_retr
     from root_branch_section_measurement import BranchOwnership
     from root_cubical_disk_section import interior_boundary_section_class
     ownership=BranchOwnership(source,source_adj) if _ownership is None else _ownership
-    section_index=NativeSectionIndex(solid,interior_boundary_section_class())
-    slab_cache={}
-    records=[];routes={};occupied=set(map(tuple,solid.cells));h=solid.pitch
+    section_index=(_section_index if _section_index is not None else
+                   NativeSectionIndex(solid,interior_boundary_section_class()))
+    slab_cache={} if _slab_cache is None else _slab_cache
+    records=[];routes={};occupied=solid.occupied;h=solid.pitch
     def supported(a,b):
         low=np.floor(np.minimum(a,b)/h).astype(int)-1
         high=np.floor(np.maximum(a,b)/h).astype(int)
@@ -428,7 +437,8 @@ def geometric_endpoints(solid,graph,*,_ownership=None,_only_endpoints=None,_retr
     result=dict(points=points,adjacency=adj)
     if _retry and any(r['status']!='geometric_surface_estimate' for r in records):
         from root_native_endpoint_retry import retry_from_interior
-        result,records=retry_from_interior(solid,result,records,ownership)
+        result,records=retry_from_interior(solid,result,records,ownership,
+                                           section_index=section_index,slab_cache=slab_cache)
     return result,records
 
 
@@ -449,13 +459,12 @@ def subdivide_measurement_graph(graph,max_length):
     return dict(points=points,adjacency=adj,subdivided_without_geometry_change=True)
 
 
-def edge_radius_profile(solid, points, adjacency, progress=None):
+def edge_radius_profile(solid, points, adjacency, progress=None,section_workers=1):
     from root_branch_section_measurement import BranchOwnership
     from root_cubical_disk_section import interior_boundary_section_class
     points = np.asarray(points,float)
     ledger = graph_measurement_ledger(points,adjacency,coordinate_units='model_units')
     owner = BranchOwnership(points,adjacency)
-    engine = NativeSectionIndex(solid,interior_boundary_section_class())
     stations = []
     for branch in ledger['branches']:
         ids = branch['source_node_ids']
@@ -467,13 +476,14 @@ def edge_radius_profile(solid, points, adjacency, progress=None):
             stations.append(dict(node_ids=[int(a),int(b)],branch_id=branch['branch_id'],
                                  position=((points[a]+points[b])/2).tolist(),
                                  normal=None if normal is None else normal.tolist()))
-    rows = [];slab_cache={}
+    from root_native_section_workers import sections
+    cuts=iter(sections(solid,[(s['position'],s['normal']) for s in stations if s['normal'] is not None],section_workers))
+    rows = []
     for at,station in enumerate(stations):
         if station['normal'] is None:
             result = dict(radius=None,status='MISSING_UNIQUE_BRANCH_NORMAL')
         else:
-            result = axis_aligned_section(solid,station['position'],station['normal'],slab_cache)
-            if result is None:result = engine.section(station['position'],station['normal'])
+            result = next(cuts)
             if result.get('radius') is not None:
                 witnesses = result['section_centroid_evidence']['_interior_polygon_witnesses']
                 if any(owner.nearest_owners(p) != {station['branch_id']} for p in witnesses):
@@ -494,7 +504,10 @@ def edge_radius_profile(solid, points, adjacency, progress=None):
 def measure_native(entity, output, *, stage='regularized_negative_indices',
                    coordinate_units=None, scale_mm=None, inherit_from=None,
                    resume_axis_from=None,backend='auto', max_dense_cells=350000000, progress=None,
-                   _axis_order=None,_stop_after_endpoints=False,_allow_axis_candidate=True):
+                   _axis_order=None,_stop_after_endpoints=False,_allow_axis_candidate=True,
+                   section_workers=1):
+    if isinstance(section_workers,bool) or not isinstance(section_workers,int) or section_workers<1:
+        raise ValueError('POSITIVE_SECTION_WORKERS_REQUIRED')
     start = time.monotonic()
     def emit(phase, **data):
         if progress is not None:
@@ -519,11 +532,12 @@ def measure_native(entity, output, *, stage='regularized_negative_indices',
     provenance = dict(mode='fresh',backend=backend,requested_backend=requested_backend,
                       execution_network_policy=network_policy_state(),
                       graph_policy='native_cube_h1_quotient_junction_ports_v002',
-                      endpoint_policy='owned_trace_interior_and_short_boundary_challenge_v003',
+                      endpoint_policy='owned_trace_interior_and_short_boundary_challenge_v004',
                       implementation_sources=[file_reference(Path(__file__).with_name(name),WORKSPACE) for name in
                           ['root_native_entity_measurement.py','root_cubical_graph_quotient.py',
                            'root_native_junction_fit.py','root_native_endpoint_retry.py','root_native_axis_order.py',
-                           'root_local_network_policy.py','root_cubical_sections.py','root_section_centroid.py']],
+                           'root_local_network_policy.py','root_cubical_sections.py','root_section_centroid.py',
+                           'root_tube_measurement.py','root_sparse_lee.py','root_guarded_thinning.py','root_sparse_solid_topology.py']],
                       fresh_automatic_measurement=True,
                       input_graph_or_GT_used=False,ply_revoxelization_performed=False)
     provenance['algorithm_axis_order']=list(_axis_order)
@@ -600,7 +614,7 @@ def measure_native(entity, output, *, stage='regularized_negative_indices',
                 emit('body_correction')
                 body = indexed_body_measurement(
                     solid,kernel['points'],kernel['adjacency'],
-                    progress=lambda value:emit('body_correction',**value))
+                    progress=lambda value:emit('body_correction',**value),section_workers=section_workers)
                 checked = measure_centerline_body(solid,coordinate_units=coordinate_units or
                                                  solid.provenance['units'],kernel_graph=kernel,
                                                  frozen_body=body,include_radius_profile=False)
@@ -613,7 +627,7 @@ def measure_native(entity, output, *, stage='regularized_negative_indices',
             from root_native_junction_fit import correct_junctions,METHOD
             if stages.get('skeleton',{}).get('representation',{}).get('status')=='PASS_SUPPORTED_GEOMETRIC_GRAPH_TOPOLOGY' and stages.get('junction_fit',{}).get('method')!=METHOD:
                 emit('junction_correction')
-                graph,junction_receipt=correct_junctions(solid,graph,progress=emit)
+                graph,junction_receipt=correct_junctions(solid,graph,progress=emit,section_workers=section_workers)
                 stages['junction_fit']=junction_receipt
             axis_path=Path(output).with_name(Path(output).stem+'_axis.json')
             write_json(axis_path,dict(schema_version=SCHEMA,axis_stage_only=True,
@@ -639,7 +653,7 @@ def measure_native(entity, output, *, stage='regularized_negative_indices',
                 trial,_=measure_native(entity,trial_path,stage=stage,coordinate_units=coordinate_units,
                     scale_mm=scale_mm,backend='existing_guarded_lee',max_dense_cells=max_dense_cells,
                     progress=lambda phase,**data:emit('axis_candidate_progress',order=list(order),candidate_phase=phase,**{k:v for k,v in data.items() if k!='elapsed_seconds'}),
-                    _axis_order=order,_stop_after_endpoints=True,_allow_axis_candidate=False)
+                    _axis_order=order,_stop_after_endpoints=True,_allow_axis_candidate=False,section_workers=section_workers)
                 admission=endpoint_candidate_admission(primary,trial)
                 selection=dict(policy='retain qualified primary012; try only fixed120 on unresolved endpoints',
                     primary_axis_reference=provenance['axis_stage_reference'],primary_attempt=file_reference(primary_path),candidate=file_reference(trial_path),
@@ -654,7 +668,7 @@ def measure_native(entity, output, *, stage='regularized_negative_indices',
             if not _stop_after_endpoints:
                 graph=subdivide_measurement_graph(graph,solid.pitch)
                 emit('radius',processed=0,total=sum(map(len,graph['adjacency']))//2)
-                radius = edge_radius_profile(solid,graph['points'],graph['adjacency'],progress=emit)
+                radius = edge_radius_profile(solid,graph['points'],graph['adjacency'],progress=emit,section_workers=section_workers)
     except (ValueError,RuntimeError,AssertionError,MemoryError,OverflowError) as exc:
         failures.append(dict(code='NATIVE_PIPELINE_BLOCKED',position=None,
                              error_type=type(exc).__name__,reason=str(exc)))
@@ -721,7 +735,9 @@ def run_native_worker(args):
                                   coordinate_units=args.coordinate_units,
                                   scale_mm=args.scale_mm,inherit_from=args.inherit_from,
                                   resume_axis_from=args.resume_axis_from,
-                                  backend=args.native_backend,progress=progress)
+                                  backend=args.native_backend,progress=progress,
+                                  _allow_axis_candidate=not getattr(args,'no_axis_candidate',False),
+                                  section_workers=getattr(args,'section_workers',1))
     progress('exports_and_original_boundary')
     data,out,html = write_native_delivery(measurement,prefix,experiment,solid,
         morphology_options=dict(vertical_axis=getattr(args,'vertical_axis','z'),down_sign=getattr(args,'down_sign',-1)))

@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 from . import __version__
-from .api import MeasurementError, measure, query_length, query_radius, morphology, phenotype
+from .api import MeasurementError, import_volume, measure, query_length, query_radius, morphology, phenotype
 from .runtime import activate, initialize_workspace, script
 
 
@@ -20,14 +20,26 @@ def parser():
     gui.add_argument("--input", type=Path, action="append", default=[])
     gui.add_argument("--port", type=int, default=0)
     gui.add_argument("--open-browser", action="store_true")
-    one = commands.add_parser("measure", help="测量一个原生实体或三角面 PLY")
+    one = commands.add_parser("measure", help="测量原生实体包、三维体素文件（.npy/.npz/.tif）或三角面 PLY")
     one.add_argument("model", type=Path)
     one.add_argument("--workspace", type=Path, default=Path("runs/default"))
     one.add_argument("--scale-mm", type=float)
     one.add_argument("--max-memory-mb", type=int, default=8192)
     one.add_argument("--section-workers", type=int, default=1, help="独立截面查询进程数（默认 1）")
+    one.add_argument("--voxel-pitch", type=float, help="三维体素文件（.npy/.npz/.tif）的体素间距（必填）")
+    one.add_argument("--voxel-axis-order", choices=["xyz", "zyx"], default="xyz", help="三维体素数组轴序（默认 xyz，CT/TIFF 堆叠常用 zyx）")
+    one.add_argument("--voxel-threshold", type=float, default=0.0, help="数值体素前景阈值（> threshold 为占用，默认 0）")
+    one.add_argument("--voxel-array-key", default=None, help="NPZ 包含多个三维数组时指定键名")
     one.add_argument("--mesh-target-pitch", type=float)
     one.add_argument("--mesh-target-reason", default="")
+    imp = commands.add_parser("import-volume", help="将通用三维二值体素（.npy/.npz/.tif）转为原生实体包")
+    imp.add_argument("source", type=Path)
+    imp.add_argument("--output", type=Path, required=True, help="新输出目录（不可为已有非空目录）")
+    imp.add_argument("--pitch", type=float, required=True, help="正的有限体素间距")
+    imp.add_argument("--axis-order", choices=["xyz", "zyx"], default="xyz")
+    imp.add_argument("--threshold", type=float, default=0.0)
+    imp.add_argument("--array-key", default=None)
+    imp.add_argument("--label", default=None)
     batch = commands.add_parser("batch", help="按清单顺序批量测量原生实体")
     batch.add_argument("manifest", type=Path)
     batch.add_argument("--workspace", type=Path, default=Path("runs/default"))
@@ -84,11 +96,24 @@ def main(argv=None):
             from root_model_delivery_service import serve_workspace
             root = initialize_workspace(args.workspace)
             serve_workspace(root, args.port, args.open_browser, input_paths=args.input)
+        elif args.command == "import-volume":
+            info = import_volume(
+                args.source,
+                args.output,
+                pitch=args.pitch,
+                axis_order=args.axis_order,
+                threshold=args.threshold,
+                array_key=args.array_key,
+                label=args.label,
+            )
+            print(json.dumps(info, ensure_ascii=False))
         elif args.command == "measure":
             result = measure(args.model, workspace=args.workspace, scale_mm=args.scale_mm,
                 max_memory_mb=args.max_memory_mb, mesh_target_pitch=args.mesh_target_pitch,
                 mesh_target_reason=args.mesh_target_reason, vertical_axis=args.vertical_axis,
-                down_sign=args.down_sign, section_workers=args.section_workers)
+                down_sign=args.down_sign, section_workers=args.section_workers,
+                voxel_pitch=args.voxel_pitch, voxel_axis_order=args.voxel_axis_order,
+                voxel_threshold=args.voxel_threshold, voxel_array_key=args.voxel_array_key)
             print(json.dumps({"prefix": str(result.prefix), "parameters": result.parameters}, ensure_ascii=False))
         elif args.command == "batch":
             if isinstance(args.section_workers, bool) or not isinstance(args.section_workers, int) or args.section_workers < 1:

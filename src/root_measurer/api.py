@@ -32,13 +32,30 @@ class Measurement:
         return json.loads(path.read_text(encoding="utf-8"))
 
 
+def import_volume(source, output_dir, *, pitch, axis_order="xyz", threshold=0.0, array_key=None, label=None):
+    """Import a 3D binary/numeric voxel volume (.npy/.npz/.tif/.tiff) as a SHA-bound native solid."""
+    activate()
+    from root_voxel_import import import_voxel_volume
+    return import_voxel_volume(
+        source,
+        output_dir,
+        pitch=pitch,
+        axis_order=axis_order,
+        threshold=threshold,
+        array_key=array_key,
+        label=label,
+    )
+
+
 def measure(model, *, workspace="runs/default", scale_mm=None, max_memory_mb=8192,
             mesh_target_pitch=None, mesh_target_reason="", vertical_axis="z", down_sign=-1,
-            no_axis_candidate=False, section_workers=1):
+            no_axis_candidate=False, section_workers=1, voxel_pitch=None, voxel_axis_order="xyz",
+            voxel_threshold=0.0, voxel_array_key=None):
     activate()
     if isinstance(section_workers,bool) or not isinstance(section_workers,int) or section_workers<1:
         raise ValueError("POSITIVE_SECTION_WORKERS_REQUIRED")
     from root_model_morphology import settings
+    from root_voxel_import import import_voxel_volume, is_voxel_volume_path
     settings(dict(vertical_axis=vertical_axis, down_sign=down_sign))
     source = Path(model).expanduser().resolve()
     if source.is_dir():
@@ -47,11 +64,29 @@ def measure(model, *, workspace="runs/default", scale_mm=None, max_memory_mb=819
         raise FileNotFoundError(source)
     if scale_mm is not None and (isinstance(scale_mm, bool) or not math.isfinite(scale_mm) or scale_mm <= 0):
         raise ValueError("POSITIVE_FINITE_MM_SCALE_REQUIRED")
+    is_voxel = is_voxel_volume_path(source)
+    if is_voxel:
+        if voxel_pitch is None or isinstance(voxel_pitch, bool) or not math.isfinite(float(voxel_pitch)) or float(voxel_pitch) <= 0:
+            raise ValueError("POSITIVE_FINITE_VOXEL_PITCH_REQUIRED")
+        if str(voxel_axis_order).strip().lower() not in ("xyz", "zyx"):
+            raise ValueError("AXIS_ORDER_XYZ_OR_ZYX_REQUIRED")
     root = initialize_workspace(workspace)
-    prefix = unused_run(root) / "model"
+    run_dir = unused_run(root)
+    prefix = run_dir / "model"
     mesh = source.suffix.lower() == ".ply"
+    entity_source = source
+    if is_voxel:
+        imported = import_voxel_volume(
+            source,
+            run_dir / "imported_voxel",
+            pitch=float(voxel_pitch),
+            axis_order=voxel_axis_order,
+            threshold=voxel_threshold,
+            array_key=voxel_array_key,
+        )
+        entity_source = Path(imported["entity_path"])
     args = [sys.executable, "-B", str(script("measure_model_delivery.py")),
-            "--mesh" if mesh else "--entity", str(source), "--output-prefix", str(prefix),
+            "--mesh" if mesh else "--entity", str(entity_source), "--output-prefix", str(prefix),
             "--max-memory-mb", str(max_memory_mb), "--vertical-axis", vertical_axis, "--down-sign", str(down_sign)]
     if scale_mm is not None:
         args += ["--scale-mm", str(scale_mm)]

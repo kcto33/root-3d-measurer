@@ -42,6 +42,16 @@ root-measurer gui --workspace runs/demo_workspace --input runs/demo_inputs/strai
 
 实体化阶段负责统一清理伪影、空腔、碎片、薄片和异常连接，确定最终测量对象。测量器只计算该输入实体的参数，不推测真实根系是否完整。轴长的可用状态表示算法对当前输入的计算覆盖；未解轴段或截面按字段报告，参见[职责与输出范围](docs/input_format.md#实体化与测量的职责)。
 
+**通用三维二值体素输入（`.npy` / `.npz` / 3D `.tif` / `.tiff`）：** 适用于 X 射线 CT、MRI 或任意外部三维分割结果，直接导入或测量而无需预转换：
+
+```powershell
+# 直接测量三维体素文件（CT/TIFF 堆叠常用 --voxel-axis-order zyx；pitch 为体素边长）
+root-measurer measure root_ct.npy --voxel-pitch 0.05 --voxel-axis-order zyx --scale-mm 1 --section-workers 4
+
+# 或先转为 SHA-256 绑定的原生实体包再复用/批量测量
+root-measurer import-volume root_ct.tif --output runs/ct_solid --pitch 0.05 --axis-order zyx
+```
+
 **兼容输入：闭合三角网格 PLY。** 使用 `measure model.ply --mesh-target-pitch ... --mesh-target-reason "依据输入特征尺度"`。原三角面用于半径截面，派生占据仅用于轴提取。分辨率和相位挑战未通过时明确阻塞；没有宣称所有外部 PLY 均能完整测量。
 
 ## 批量测量

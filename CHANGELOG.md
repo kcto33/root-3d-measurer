@@ -6,7 +6,8 @@
 - Retained dense storage for admitted small components and separated disconnected-solid bounded domains (preserving every source cell and the 350M per-component guard), keeping native pitch/material, graph, endpoint and section measurement definitions unchanged.
 - Exact global sparse cavity accounting now uses actual occupied/interval storage limits instead of rejecting an unallocated empty component box.
 - Added optional multi-process plane section queries (`--section-workers`, default `1`) across CLI (`measure`/`batch`), Python API, batch runner and local web workspace, preserving exact serial section order and values.
-- Added raw/guarded estimator, axis-order/full-kernel equality, large-empty-domain, component memory, point-contact, short-endpoint and worker-passthrough checks.
+- Added standalone 3D binary/numeric voxel volume import (`.npy`, `.npz`, 3D `.tif`/`.tiff` with explicit `--voxel-pitch` and `xyz`/`zyx` axis order) via `import-volume`, `measure`, Python API `import_volume`, and the local web workspace.
+- Added raw/guarded estimator, axis-order/full-kernel equality, large-empty-domain, component memory, point-contact, short-endpoint, voxel-import and worker-passthrough checks.
 
 ## 0.3.1 — 2026-10-29
 

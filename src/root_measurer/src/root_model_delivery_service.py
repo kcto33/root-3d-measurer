@@ -40,6 +40,7 @@ def serve_workspace(experiment,port=0,open_browser=False,input_paths=()):
     morphology_cache={};morphology_lock=threading.Lock()
     phenotyping_lock=threading.Lock()
     def register_entity(path):
+        from root_voxel_import import is_voxel_volume_path
         path=Path(path).resolve()
         if path.is_dir():path=path/'entity_prediction.json'
         if path.suffix.lower()=='.ply':
@@ -48,6 +49,11 @@ def serve_workspace(experiment,port=0,open_browser=False,input_paths=()):
                 if stream.readline().strip()!=b'ply':raise ValueError('PLY_REQUIRED')
             key=hashlib.sha256(str(path).encode('utf-8')).hexdigest()[:16]
             entities[key]=dict(id=key,label=path.parent.name+' / '+path.stem,path=str(path),input_kind='triangle_ply',pitch=None,occupied_cells=None)
+            return entities[key]
+        if is_voxel_volume_path(path):
+            if not path.is_file() or path.stat().st_size<=0:raise ValueError('VOXEL_VOLUME_FILE_REQUIRED')
+            key=hashlib.sha256(str(path).encode('utf-8')).hexdigest()[:16]
+            entities[key]=dict(id=key,label=path.parent.name+' / '+path.stem,path=str(path),input_kind='voxel_volume',pitch=None,occupied_cells=None)
             return entities[key]
         data=json.loads(path.read_text(encoding='utf-8-sig'))
         if not data.get('fields') or 'all_source_negative_cells_accounted' not in data:
@@ -378,13 +384,30 @@ def serve_workspace(experiment,port=0,open_browser=False,input_paths=()):
                         if entity.get('input_kind')=='triangle_ply':
                             if target is not None and (isinstance(target,bool) or not math.isfinite(float(target)) or float(target)<=0):raise ValueError('POSITIVE_INPUT_DERIVED_TARGET_PITCH_REQUIRED')
                             if not isinstance(reason,str) or len(reason)>2000:raise ValueError('MESH_FEATURE_SCALE_REASON_REQUIRED')
+                        voxel_pitch=data.get('voxel_pitch');voxel_axis_order=data.get('voxel_axis_order','xyz')
+                        voxel_threshold=data.get('voxel_threshold',0.0);voxel_array_key=data.get('voxel_array_key') or None
+                        if entity.get('input_kind')=='voxel_volume':
+                            if voxel_pitch is None or isinstance(voxel_pitch,bool) or not math.isfinite(float(voxel_pitch)) or float(voxel_pitch)<=0:
+                                raise ValueError('POSITIVE_FINITE_VOXEL_PITCH_REQUIRED')
+                            if str(voxel_axis_order).strip().lower() not in ('xyz','zyx'):
+                                raise ValueError('AXIS_ORDER_XYZ_OR_ZYX_REQUIRED')
+                            if isinstance(voxel_threshold,bool) or not math.isfinite(float(voxel_threshold)):
+                                raise ValueError('FINITE_VOXEL_THRESHOLD_REQUIRED')
                         run=1
                         while (base/f'run{run:03d}').exists():run+=1
                         folder=base/f'run{run:03d}';folder.mkdir(parents=True)
                         name=re.sub('[^a-zA-Z0-9_]+','_',entity['label'])[:60] or 'entity'
                         prefix=folder/(name+'_fresh');cancel=folder/'cancel.json'
+                        input_arg=entity['path']
+                        if entity.get('input_kind')=='voxel_volume':
+                            from root_voxel_import import import_voxel_volume
+                            imported=import_voxel_volume(
+                                entity['path'],folder/'imported_voxel',pitch=float(voxel_pitch),
+                                axis_order=voxel_axis_order,threshold=float(voxel_threshold),
+                                array_key=voxel_array_key,label=name)
+                            input_arg=imported['entity_path']
                         cmd=[sys.executable,'-B',str(PROJECT/'scripts/measure_model_delivery.py'),
-                             '--mesh' if entity.get('input_kind')=='triangle_ply' else '--entity',entity['path'],'--output-prefix',str(prefix),
+                             '--mesh' if entity.get('input_kind')=='triangle_ply' else '--entity',input_arg,'--output-prefix',str(prefix),
                              '--native-backend','auto','--section-workers',str(workers),'--cancel-file',str(cancel),
                              '--vertical-axis',orientation['vertical_axis'],'--down-sign',str(orientation['down_sign'])]
                         if entity.get('input_kind')=='triangle_ply':

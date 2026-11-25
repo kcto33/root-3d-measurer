@@ -20,9 +20,9 @@ def pick_entity_path():
                 ('dwReserved',wintypes.DWORD),('FlagsEx',wintypes.DWORD)]
         buffer=ctypes.create_unicode_buffer(32768);dialog=OpenFile();dialog.lStructSize=ctypes.sizeof(dialog)
         dialog.lpstrFile=ctypes.cast(buffer,wintypes.LPWSTR);dialog.nMaxFile=len(buffer)
-        dialog.lpstrFilter='实体或三角网格 (*.json;*.ply)\0*.json;*.ply\0所有文件 (*.*)\0*.*\0\0';dialog.nFilterIndex=1
+        dialog.lpstrFilter='实体、三维体素或三角网格 (*.json;*.npy;*.npz;*.tif;*.tiff;*.ply)\0*.json;*.npy;*.npz;*.tif;*.tiff;*.ply\0所有文件 (*.*)\0*.*\0\0';dialog.nFilterIndex=1
         dialog.lpstrInitialDir=str(Path.cwd())
-        dialog.lpstrTitle='选择实体 JSON 或独立三角网格 PLY';dialog.Flags=0x00001000|0x00000800|0x00080000|0x00000008
+        dialog.lpstrTitle='选择原生实体 JSON、三维体素 (.npy/.npz/.tif) 或三角网格 PLY';dialog.Flags=0x00001000|0x00000800|0x00080000|0x00000008
         if ctypes.windll.comdlg32.GetOpenFileNameW(ctypes.byref(dialog)):return buffer.value
         error=ctypes.windll.comdlg32.CommDlgExtendedError()
         if error:raise RuntimeError('NATIVE_FILE_DIALOG_ERROR_'+str(error))
@@ -30,7 +30,7 @@ def pick_entity_path():
     import tkinter as tk
     from tkinter import filedialog
     root=tk.Tk();root.withdraw()
-    try:return filedialog.askopenfilename(title='选择实体 JSON 或三角网格 PLY',filetypes=[('实体及网格','*.json *.ply')]) or None
+    try:return filedialog.askopenfilename(title='选择原生实体 JSON、三维体素或三角网格 PLY',filetypes=[('根系模型','*.json *.npy *.npz *.tif *.tiff *.ply')]) or None
     finally:root.destroy()
 
 def serve_native(prefix, options, data):

@@ -18,6 +18,22 @@ JSON 至少包含 `root`、`fields`、`duplicate_occupied_cells`（false）、`a
 
 物理尺度不由归一化坐标推断。每模型单位对应毫米的比例必须由用户确认。面积按比例平方、体积按比例立方换算。
 
+## 外部体素与采集元数据
+
+支持三维 NPY、NPZ、TIFF/OME-TIFF。数组保持文件原轴序；`auto` 使用采集元数据，普通 TIFF 的 QYX/IYX 页堆栈按 ZYX 解释，其余无轴序信息时使用 XYZ。也可显式指定 `xyz` 或 `zyx`。多数组 NPZ 必须能唯一确定三维数组，或给出 `array_key`。
+
+NPZ 可保存标量字符串 `axis_order`、`unit` 及三元素 `spacing`、`origin`；这些键不参与三维数组候选选择。OME-TIFF 读取 PhysicalSizeX/Y/Z 及其已声明单位。可选采集 JSON 示例如下，显式 JSON 覆盖内嵌元数据，显式参数再覆盖 JSON：
+
+```json
+{"spacing": [0.05, 0.05, 0.20], "axis_order": "zyx", "unit": "mm", "origin": [10, 20, 30]}
+```
+
+`spacing` 和 `origin` 始终为 XYZ，单位支持 mm、cm、m、um/µm/μm、nm。原点仅作为来源坐标信息保存；测量采用以体素零号角为原点的局部 XYZ，不自动施加扫描仪旋转或平移。未声明单位时保留模型单位；声明单位可自动换算为毫米，显式毫米比例优先。该信息保存在派生实体包中，后续直接测量此包时仍生效。
+
+不指定标签时取大于阈值的前景；指定 `labels` 时仅取这些整数标签的并集，忽略阈值。同一文件的不同标签可分别列入批次。原始文件只读。
+
+内部测量域为等距立方体。输入三轴间距不等时，必须显式给出 `resample_pitch`；按目标格中心最近邻采样，不默认猜测目标分辨率。JSON 的 `resampling` 保存源标签体积、输出体积、方法及原文件保留状态；参数和测量报告的 `input_preparation`/`volume_import` 保留这些信息。重采样可能改变体积、薄枝和接触关系，结果对应派生实体。
+
 运行 `root-measurer demo --output runs/demo_inputs --case straight` 可生成完整可读示例。示例不会覆盖已有目录。
 
 ## 实体化与测量的职责

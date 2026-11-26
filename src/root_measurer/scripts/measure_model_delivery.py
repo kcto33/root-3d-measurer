@@ -10,16 +10,44 @@ from root_model_input_loader import file_sha
 
 def _worker_memory(process):
     import psutil
+    totals=dict(working_set=0,private_bytes=0,peak_working_set=0)
     try:
-        proc=psutil.Process(process.pid);info=proc.memory_info()
-        private=getattr(info,'private',None)
-        if private is None:
-            try:private=proc.memory_full_info().uss
-            except (psutil.AccessDenied,AttributeError):private=info.rss
-        return dict(working_set=info.rss,private_bytes=private,
-                    peak_working_set=getattr(info,'peak_wset',info.rss))
+        proc=psutil.Process(process.pid)
+        members=[proc,*proc.children(recursive=True)]
     except (psutil.NoSuchProcess,psutil.ZombieProcess):
-        return dict(working_set=0,private_bytes=0,peak_working_set=0)
+        return totals
+    for member in members:
+        try:
+            info=member.memory_info()
+            private=getattr(info,'private',None)
+            if private is None:
+                try:private=member.memory_full_info().uss
+                except (psutil.AccessDenied,AttributeError):private=info.rss
+            totals['working_set']+=info.rss
+            totals['private_bytes']+=private
+            totals['peak_working_set']+=getattr(info,'peak_wset',info.rss)
+        except (psutil.NoSuchProcess,psutil.ZombieProcess):
+            continue
+    return totals
+
+
+def _stop_worker(process):
+    """Stop the existing measurement worker and its section processes together."""
+    import psutil
+    try:
+        children=psutil.Process(process.pid).children(recursive=True)
+    except (psutil.NoSuchProcess,psutil.ZombieProcess):
+        children=[]
+    if process.poll() is None:
+        process.terminate()
+    for child in children:
+        try:child.terminate()
+        except (psutil.NoSuchProcess,psutil.ZombieProcess):pass
+    _,alive=psutil.wait_procs(children,timeout=3)
+    for child in alive:
+        try:child.kill()
+        except (psutil.NoSuchProcess,psutil.ZombieProcess):pass
+    process.wait()
 
 
 def _supervise_native(args,argv):
@@ -37,7 +65,8 @@ def _supervise_native(args,argv):
     with (root/'EXPERIMENT_LOG.md').open('a',encoding='utf-8') as stream:
         stream.write('\n'+local_date()+' PRELOG local native execution: '+
                      json.dumps(dict(output_prefix=prefix.relative_to(root).as_posix(),
-                                     entity=str(args.entity) if args.entity else None,mesh=str(args.mesh) if args.mesh else None,stage=args.entity_stage,
+                                     entity=str(args.entity) if args.entity else None,mesh=str(args.mesh) if args.mesh else None,
+                                     volume=str(args.volume) if args.volume else None,stage=args.entity_stage,
                                      backend=args.native_backend,inherit_from=str(args.inherit_from)
                                      if args.inherit_from else None,
                                      max_memory_mb=args.max_memory_mb),ensure_ascii=False)+'\n')
@@ -71,19 +100,19 @@ def _supervise_native(args,argv):
     try:
         while process.poll() is None:
             if args.cancel_file is not None and args.cancel_file.is_file():
-                reason='USER_CANCELLED';process.terminate();break
+                reason='USER_CANCELLED';_stop_worker(process);break
             memory=_worker_memory(process)
             peak_ws=max(peak_ws,memory['peak_working_set'],memory['working_set'])
             peak_private=max(peak_private,memory['private_bytes'])
             if max(memory['working_set'],memory['private_bytes'])>args.max_memory_mb*1024**2:
-                reason='WORKER_MEMORY_BUDGET_EXCEEDED';process.terminate();break
+                reason='WORKER_MEMORY_BUDGET_EXCEEDED';_stop_worker(process);break
             time.sleep(.25)
         process.wait();reader.join(timeout=5)
     except KeyboardInterrupt:
-        reason='USER_CANCELLED';process.terminate();process.wait();reader.join(timeout=5)
+        reason='USER_CANCELLED';_stop_worker(process);reader.join(timeout=5)
     outcome=dict(worker_exit_code=process.returncode,elapsed_seconds=time.monotonic()-started,
                  peak_working_set_bytes=peak_ws,peak_private_bytes=peak_private,
-                 max_memory_mb=args.max_memory_mb,stop_reason=reason,
+                 max_memory_mb=args.max_memory_mb,memory_scope='worker_process_tree',stop_reason=reason,
                  measurement_exists=prefix.with_name(prefix.name+'_measurement.json').is_file(),
                  delivery_exists=prefix.with_name(prefix.name+'_delivery.json').is_file())
     if outcome['measurement_exists']:
@@ -104,6 +133,9 @@ def main(argv=None):
     ap=argparse.ArgumentParser(description=__doc__)
     inputs=ap.add_mutually_exclusive_group(required=True)
     inputs.add_argument('--mesh',type=Path);inputs.add_argument('--entity',type=Path)
+    inputs.add_argument('--volume',type=Path,help='3D voxel volume imported inside the supervised worker')
+    from root_measurement_inputs import add_volume_options
+    add_volume_options(ap)
     ap.add_argument('--output-prefix',type=Path,required=True)
     ap.add_argument('--coordinate-units');ap.add_argument('--grid-divisions',type=int,default=16)
     ap.add_argument('--execution-domain',choices=['local','registered_slurm_complete_source'],default='local');ap.add_argument('--reuse-measurement',type=Path)
@@ -125,6 +157,10 @@ def main(argv=None):
     ap.add_argument('--_native-worker',action='store_true',help=argparse.SUPPRESS)
     a=ap.parse_args(argv)
     if a.section_workers<1:ap.error('--section-workers must be positive')
+    if a.volume is not None:
+        from root_voxel_import import _validate_pitch
+        if a.voxel_pitch is not None:_validate_pitch(a.voxel_pitch)
+        if not __import__('math').isfinite(a.voxel_threshold):ap.error('finite voxel threshold required')
     if a.scale_mm is not None and (not __import__('math').isfinite(a.scale_mm) or a.scale_mm<=0):
         ap.error('positive finite mm scale required')
     if not a.mesh_workflow and (a.mesh_target_pitch is not None or a.mesh_target_reason or a.mesh_resume_target_from is not None):
@@ -141,7 +177,7 @@ def main(argv=None):
             from root_mesh_delivery_measurement import run_mesh_worker
             return run_mesh_worker(a)
         return _supervise_native(a,argv)
-    if a.entity is not None:
+    if a.entity is not None or a.volume is not None:
         if a.inherit_from and a.resume_axis_from:
             ap.error('--inherit-from and --resume-axis-from are mutually exclusive')
         if a.reuse_measurement is not None:
@@ -149,6 +185,15 @@ def main(argv=None):
         if a._native_worker:
             from root_local_network_policy import disable_measurement_network
             disable_measurement_network()
+            if a.volume is not None:
+                from root_voxel_import import import_voxel_volume
+                imported=import_voxel_volume(a.volume,a.output_prefix.resolve().with_name(a.output_prefix.name+'_imported_voxel'),
+                    pitch=a.voxel_pitch,axis_order=a.voxel_axis_order,threshold=a.voxel_threshold,array_key=a.voxel_array_key,
+                    spacing=a.voxel_spacing,labels=a.voxel_labels,unit=a.voxel_unit,metadata=a.voxel_metadata,
+                    resample_pitch=a.voxel_resample_pitch)
+                a.entity=Path(imported['entity_path'])
+                if a.scale_mm is None:a.scale_mm=imported['settings']['scale_mm_per_model_unit']
+                if a.coordinate_units is None:a.coordinate_units=imported['settings']['unit']
             from root_native_entity_measurement import run_native_worker
             return run_native_worker(a)
         return _supervise_native(a,argv)

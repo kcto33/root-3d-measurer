@@ -52,6 +52,17 @@ root-measurer measure root_ct.npy --voxel-pitch 0.05 --voxel-axis-order zyx --sc
 root-measurer import-volume root_ct.tif --output runs/ct_solid --pitch 0.05 --axis-order zyx
 ```
 
+可指定分割标签（如 `--voxel-labels 1 3`）；标签模式优先于阈值。OME-TIFF 的物理间距／单位和 NPZ 的 `spacing`、`axis_order`、`unit`、`origin` 可自动读取，也可用 `--voxel-metadata acquisition.json` 提供。间距向量始终为 XYZ，与数组存储轴序分别设置。
+
+```powershell
+# 非等距体素：显式选择目标格距；按最近邻转换，保留原文件及体积变化记录。
+root-measurer measure root_ct.npy --voxel-spacing 0.05 0.05 0.20 --voxel-axis-order zyx --voxel-unit mm --voxel-labels 1 --voxel-resample-pitch 0.05
+```
+
+未指定目标格距时，各向异性体素会明确拒绝转换。有可信单位时自动换算为毫米；显式 `--scale-mm` 优先。先 `import-volume` 再测量其实体包也保留同样的尺度。重采样后的参数描述派生实体，源原点保存在元数据中，测量坐标使用局部 XYZ。格式与约定见[输入规范](docs/input_format.md)。
+
+TIFF 使用原始堆栈轴序读取，不按 RGB/RGBA 图像自动换轴。通过 `measure` 或工作台测量体素时，转换与后续测量均在受监督工作进程内完成；内存上限统计整个工作进程树（含并行截面进程），取消或超限会一起停止这些进程。独立 `import-volume` 只执行格式转换，不启动测量监督器。
+
 **兼容输入：闭合三角网格 PLY。** 使用 `measure model.ply --mesh-target-pitch ... --mesh-target-reason "依据输入特征尺度"`。原三角面用于半径截面，派生占据仅用于轴提取。分辨率和相位挑战未通过时明确阻塞；没有宣称所有外部 PLY 均能完整测量。
 
 ## 批量测量
@@ -67,7 +78,22 @@ root-measurer demo --output runs/demo_inputs --case curve
 root-measurer batch runs/inputs.json --workspace runs/batch_workspace
 ```
 
-工作台也支持每行一个原生实体路径。按顺序执行，保留失败/取消项及完整分母，生成 `batch_summary.json` 和 `batch_summary.csv`。批量入口目前针对原生实体。
+工作台、CLI 和 Python API 支持混合原生实体、体素和闭合 PLY。清单既兼容路径字符串，也接受逐样本设置：
+
+```json
+{
+  "defaults": {"section_workers": 2},
+  "inputs": [
+    {"id": "root_a", "path": "root_a.npy", "voxel_pitch": 0.05, "voxel_unit": "mm", "voxel_labels": [1]},
+    {"id": "root_b", "path": "root_b.npz", "vertical_axis": "y", "down_sign": 1},
+    {"id": "root_c", "path": "root_c.ply", "mesh_target_pitch": 0.05, "mesh_target_reason": "输入最小特征尺度"}
+  ]
+}
+```
+
+路径及 `voxel_metadata` 相对清单文件解析；逐项设置优先于清单 `defaults`，清单 `defaults` 优先于命令行默认值。同一文件可用不同标签重复列入。输入失败后继续其余样本，取消项保留完整分母；每次使用新运行目录。`batch_summary.json/csv` 每模型一行，`batch_parameters.csv` 保存全部参数、单位、状态和覆盖率，失败模型也保留缺项行。工作台重启后可查看历史汇总、下载参数；没有结束汇总的批次显示待确认状态，已有进度记录可以导出，不会自动重启。
+
+Python：`from root_measurer import batch`，调用 `result = batch("inputs.json", workspace="runs/batch_workspace")`，通过 `result.summary` 查看完整结果。
 
 ## 植物形态指标
 
@@ -97,6 +123,8 @@ Python：`from root_measurer import morphology`，再调用 `morphology(measurem
 | 空间分布 | 无向根段倾角/朝向、深度×朝向，以及相对显式参考点的位置方位、深度×位置方位与水平径向根长 |
 
 工作台结果页新增“根系表型与根轴标注”：先查看几何分布，再点选或输入根基节点，核对续接和根尖/截断端，最后确认相应分量。可以修改分箱与物理窗口、在模型上高亮根轴、导入标注、导出JSON/CSV及保存分析。重新打开结果时恢复最近一次与原测量SHA匹配的已保存标注。
+
+复核清单显示待核对根基、未决分叉、未人工确认根轴和未解几何端点的数量；`review_summary` 随完整 JSON 及 CSV 输出。短枝、闭环、分离分量和缺失半径的可用部分继续导出，缺项不插补。改根基或续接后需要重新确认相应根轴。
 
 **自动续接只提供候选。** 对称分叉等未决关系保持不可用；闭环和分离分量保留原状。人工确认表达根轴身份判断，独立精度验收另行记录。直径只使用合格单分支半径，混合/带孔/缺失截面不补值。各分布保留未分配弧长及完整分母。
 

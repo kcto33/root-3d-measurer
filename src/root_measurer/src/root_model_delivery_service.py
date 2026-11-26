@@ -21,6 +21,25 @@ from root_model_delivery_reconstruction import reconstruction_comparison,reconst
 PROJECT=Path(__file__).resolve().parents[1]
 
 
+def _running(job):
+    return job.get('process') is not None and job['process'].poll() is None
+
+
+def batch_history(experiment):
+    """Restore completed and unfinished batch records without restarting work."""
+    experiment=Path(experiment).resolve();records={}
+    for folder in sorted((experiment/'results/model_delivery_local').glob('run*')):
+        request=folder/'batch_request.json';summary=folder/'batch_summary.json'
+        if not request.is_file() and not summary.is_file():continue
+        try:
+            value=json.loads((request if request.is_file() else summary).read_text(encoding='utf-8'))
+            key=hashlib.sha256(folder.relative_to(experiment).as_posix().encode()).hexdigest()[:16]
+            records[key]=dict(id=key,process=None,folder=folder,cancel=folder/'cancel.json',total=value['total'],
+                              started=time.monotonic(),history=True)
+        except (ValueError,KeyError,OSError):continue
+    return records
+
+
 def _parse_section_workers(raw):
     if raw is None:
         return 1
@@ -35,7 +54,7 @@ def serve_workspace(experiment,port=0,open_browser=False,input_paths=()):
         raise ValueError('ROOT_MEASURER_WORKSPACE_REQUIRED')
     base=experiment/'results/model_delivery_local'
     token=secrets.token_hex(24)
-    entities={};jobs={};batches={};lock=threading.Lock()
+    entities={};jobs={};batches=batch_history(experiment);lock=threading.Lock()
     interaction_cache={};interaction_lock=threading.Lock()
     morphology_cache={};morphology_lock=threading.Lock()
     phenotyping_lock=threading.Lock()
@@ -122,10 +141,12 @@ def serve_workspace(experiment,port=0,open_browser=False,input_paths=()):
             for line in reversed(progress.read_text(encoding='utf-8').splitlines()):
                 try:event=json.loads(line);break
                 except ValueError:pass
-        summary=folder/'batch_summary.json';code=batch['process'].poll()
-        return dict(id=batch['id'],running=code is None,exit_code=code,total=batch['total'],progress=event,
-                    summary=json.loads(summary.read_text(encoding='utf-8')) if summary.exists() else None,
-                    elapsed_seconds=time.monotonic()-batch['started'])
+        summary=folder/'batch_summary.json';process=batch.get('process')
+        value=json.loads(summary.read_text(encoding='utf-8')) if summary.exists() else None
+        return dict(id=batch['id'],running=_running(batch),exit_code=process.poll() if process is not None else None,
+                    total=batch['total'],progress=event,summary=value,history=batch.get('history',False),
+                    status=value.get('status','COMPLETE') if value else ('RUNNING' if _running(batch) else 'NO_FINAL_SUMMARY'),
+                    elapsed_seconds=value.get('elapsed_seconds',0) if value else time.monotonic()-batch['started'])
     class Handler(BaseHTTPRequestHandler):
         def json_response(self,value,code=200):
             raw=json.dumps(value,ensure_ascii=False,allow_nan=False).encode('utf-8')
@@ -162,10 +183,11 @@ def serve_workspace(experiment,port=0,open_browser=False,input_paths=()):
                     jobs=[job_state(j) for j in jobs.values()],
                     batches=[batch_state(b) for b in batches.values()],
                     deliveries=[{k:v for k,v in r.items() if k!='path'} for r in records.values()]))
-            batch_match=re.fullmatch(r'/api/batches/([a-f0-9]{16})/(csv|json)',path)
+            batch_match=re.fullmatch(r'/api/batches/([a-f0-9]{16})/(csv|json|parameters|progress)',path)
             if batch_match and batch_match[1] in batches:
-                target=batches[batch_match[1]]['folder']/('batch_summary.'+batch_match[2])
-                if target.is_file():return self.send_file(target,'text/csv; charset=utf-8' if batch_match[2]=='csv' else 'application/json',attachment=True)
+                filename={'parameters':'batch_parameters.csv','progress':'batch_progress.jsonl'}.get(batch_match[2],'batch_summary.'+batch_match[2])
+                target=batches[batch_match[1]]['folder']/filename
+                if target.is_file():return self.send_file(target,'application/json' if batch_match[2]=='json' else ('application/x-ndjson' if batch_match[2]=='progress' else 'text/csv; charset=utf-8'),attachment=True)
             match=re.fullmatch(r'/result/([a-f0-9]{16})/(.*)',path)
             if match:
                 record=deliveries().get(match[1])
@@ -256,14 +278,17 @@ def serve_workspace(experiment,port=0,open_browser=False,input_paths=()):
                 if route:return self.send_file(*route,attachment=match[2].startswith('export/'))
             self.send_error(404)
         def do_POST(self):
-            if self.headers.get('X-Root-Local-Token')!=token:
-                return self.json_response(dict(error='LOCAL_SESSION_TOKEN_REQUIRED'),403)
             try:
                 phenotype_route=re.fullmatch(r'/result/([a-f0-9]{16})/phenotyping',self.path)
                 length=int(self.headers.get('Content-Length','0'))
-                limit=8*1024*1024 if phenotype_route else 65536
+                limit=8*1024*1024 if phenotype_route or self.path=='/api/batches' else 65536
                 if not 0<=length<=limit:return self.json_response(dict(error='REQUEST_SIZE'),400)
-                data=json.loads(self.rfile.read(length) or b'{}')
+                raw=self.rfile.read(length)
+                # Drain the bounded request before denying it; unread POST data can
+                # reset a Windows TCP connection before the client receives 403.
+                if self.headers.get('X-Root-Local-Token')!=token:
+                    return self.json_response(dict(error='LOCAL_SESSION_TOKEN_REQUIRED'),403)
+                data=json.loads(raw or b'{}')
                 if phenotype_route:
                     from root_measurer.api import phenotype
                     from root_model_phenotyping import export_phenotyping,phenotyping_csv
@@ -341,13 +366,15 @@ def serve_workspace(experiment,port=0,open_browser=False,input_paths=()):
                     return self.json_response(dict(entity=register_entity(chosen) if chosen else None))
                 if self.path=='/api/batches':
                     with lock:
-                        if any(j['process'].poll() is None for j in [*jobs.values(),*batches.values()]):raise ValueError('ONE_LOCAL_MEASUREMENT_AT_A_TIME')
-                        inputs=data.get('inputs')
-                        if not isinstance(inputs,list) or not 1<=len(inputs)<=1000 or not all(isinstance(p,str) and p.strip() for p in inputs):raise ValueError('EXPLICIT_NATIVE_INPUT_LIST_REQUIRED')
-                        records=[register_entity(p.strip().strip('"')) for p in inputs]
-                        if any(r['input_kind']!='native_entity' for r in records):raise ValueError('BATCH_NATIVE_ENTITIES_REQUIRED')
-                        sources=[r['path'] for r in records]
-                        if len(set(sources))!=len(sources):raise ValueError('DUPLICATE_BATCH_INPUT')
+                        if any(_running(j) for j in [*jobs.values(),*batches.values()]):raise ValueError('ONE_LOCAL_MEASUREMENT_AT_A_TIME')
+                        inputs=data.get('inputs');manifest_base=experiment
+                        defaults=data.get('defaults',{})
+                        if data.get('manifest_path'):
+                            original=Path(data['manifest_path']).expanduser().resolve()
+                            value=json.loads(original.read_text(encoding='utf-8-sig'))
+                            inputs=value['inputs'];defaults=dict(defaults,**value.get('defaults',{}));manifest_base=original.parent
+                        if not isinstance(inputs,list) or not 1<=len(inputs)<=1000:raise ValueError('EXPLICIT_INPUT_LIST_REQUIRED')
+                        if not isinstance(defaults,dict):raise ValueError('BATCH_DEFAULTS_OBJECT_REQUIRED')
                         scale=data.get('scale_mm')
                         if scale is not None and (isinstance(scale,bool) or not math.isfinite(float(scale)) or float(scale)<=0):raise ValueError('POSITIVE_MM_SCALE_REQUIRED')
                         workers=_parse_section_workers(data.get('section_workers'))
@@ -358,20 +385,23 @@ def serve_workspace(experiment,port=0,open_browser=False,input_paths=()):
                         folder=base/f'run{run:03d}'
                         with (experiment/'EXPERIMENT_LOG.md').open('a',encoding='utf-8') as f:
                             f.write('\n'+time.strftime('%Y-%m-%d')+' PRELOG UI batch: '+manifest.relative_to(experiment).as_posix()+' inputs; '+folder.relative_to(experiment).as_posix()+' outputs; cancellation marker in snapshot/batch_requests; results/model_delivery_local/workspace_batch_'+key+'.log records launcher.\n')
-                        write_json(manifest,dict(inputs=sources))
+                        from root_measurement_inputs import DEFAULTS
+                        inherited={k:data[k] for k in DEFAULTS if k in data}
+                        inherited.update(defaults)
+                        write_json(manifest,dict(inputs=inputs,defaults=inherited))
                         from root_model_morphology import settings
                         orientation=settings({k:data[k] for k in ['vertical_axis','down_sign'] if k in data})
-                        cmd=[sys.executable,'-B',str(PROJECT/'scripts/measure_model_batch.py'),'--manifest',str(manifest),'--output-dir',str(folder),'--cancel-file',str(cancel),
+                        cmd=[sys.executable,'-B',str(PROJECT/'scripts/measure_model_batch.py'),'--manifest',str(manifest),'--manifest-base',str(manifest_base),'--output-dir',str(folder),'--cancel-file',str(cancel),
                              '--section-workers',str(workers),'--vertical-axis',orientation['vertical_axis'],'--down-sign',str(orientation['down_sign'])]
                         if scale is not None:cmd+=['--scale-mm',str(float(scale))]
                         with (base/('workspace_batch_'+key+'.log')).open('x',encoding='utf-8') as log:
                             process=subprocess.Popen(cmd,stdout=log,stderr=subprocess.STDOUT,
                                 env=dict(os.environ,PYTHONUTF8='1',PYTHONDONTWRITEBYTECODE='1'),creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
-                        batches[key]=dict(id=key,process=process,folder=folder,cancel=cancel,total=len(sources),started=time.monotonic())
+                        batches[key]=dict(id=key,process=process,folder=folder,cancel=cancel,total=len(inputs),started=time.monotonic())
                         return self.json_response(dict(batch_id=key))
                 if self.path=='/api/jobs':
                     with lock:
-                        if any(j['process'].poll() is None for j in [*jobs.values(),*batches.values()]):
+                        if any(_running(j) for j in [*jobs.values(),*batches.values()]):
                             raise ValueError('ONE_LOCAL_MEASUREMENT_AT_A_TIME')
                         entity=entities[data['entity_id']]
                         from root_model_morphology import settings
@@ -384,36 +414,17 @@ def serve_workspace(experiment,port=0,open_browser=False,input_paths=()):
                         if entity.get('input_kind')=='triangle_ply':
                             if target is not None and (isinstance(target,bool) or not math.isfinite(float(target)) or float(target)<=0):raise ValueError('POSITIVE_INPUT_DERIVED_TARGET_PITCH_REQUIRED')
                             if not isinstance(reason,str) or len(reason)>2000:raise ValueError('MESH_FEATURE_SCALE_REASON_REQUIRED')
-                        voxel_pitch=data.get('voxel_pitch');voxel_axis_order=data.get('voxel_axis_order','xyz')
-                        voxel_threshold=data.get('voxel_threshold',0.0);voxel_array_key=data.get('voxel_array_key') or None
-                        if entity.get('input_kind')=='voxel_volume':
-                            if voxel_pitch is None or isinstance(voxel_pitch,bool) or not math.isfinite(float(voxel_pitch)) or float(voxel_pitch)<=0:
-                                raise ValueError('POSITIVE_FINITE_VOXEL_PITCH_REQUIRED')
-                            if str(voxel_axis_order).strip().lower() not in ('xyz','zyx'):
-                                raise ValueError('AXIS_ORDER_XYZ_OR_ZYX_REQUIRED')
-                            if isinstance(voxel_threshold,bool) or not math.isfinite(float(voxel_threshold)):
-                                raise ValueError('FINITE_VOXEL_THRESHOLD_REQUIRED')
+                        from root_measurement_inputs import DEFAULTS,measurement_command
+                        options={k:data[k] for k in DEFAULTS if k in data}
+                        options.update({k:orientation[k] for k in ('vertical_axis','down_sign')},section_workers=workers)
+                        cmd,_,_=measurement_command(entity['path'],'__pending__',options)
                         run=1
                         while (base/f'run{run:03d}').exists():run+=1
                         folder=base/f'run{run:03d}';folder.mkdir(parents=True)
                         name=re.sub('[^a-zA-Z0-9_]+','_',entity['label'])[:60] or 'entity'
                         prefix=folder/(name+'_fresh');cancel=folder/'cancel.json'
-                        input_arg=entity['path']
-                        if entity.get('input_kind')=='voxel_volume':
-                            from root_voxel_import import import_voxel_volume
-                            imported=import_voxel_volume(
-                                entity['path'],folder/'imported_voxel',pitch=float(voxel_pitch),
-                                axis_order=voxel_axis_order,threshold=float(voxel_threshold),
-                                array_key=voxel_array_key,label=name)
-                            input_arg=imported['entity_path']
-                        cmd=[sys.executable,'-B',str(PROJECT/'scripts/measure_model_delivery.py'),
-                             '--mesh' if entity.get('input_kind')=='triangle_ply' else '--entity',input_arg,'--output-prefix',str(prefix),
-                             '--native-backend','auto','--section-workers',str(workers),'--cancel-file',str(cancel),
-                             '--vertical-axis',orientation['vertical_axis'],'--down-sign',str(orientation['down_sign'])]
-                        if entity.get('input_kind')=='triangle_ply':
-                            cmd+=['--mesh-workflow','--mesh-target-reason',reason]
-                            if target is not None:cmd+=['--mesh-target-pitch',str(float(target))]
-                        if scale is not None:cmd+=['--scale-mm',str(float(scale))]
+                        cmd[cmd.index('--output-prefix')+1]=str(prefix)
+                        cmd+=['--cancel-file',str(cancel)]
                         with (folder/'launcher.log').open('x',encoding='utf-8') as log:
                             process=subprocess.Popen(cmd,stdout=log,stderr=subprocess.STDOUT,
                                 env=dict(os.environ,PYTHONUTF8='1',PYTHONDONTWRITEBYTECODE='1'),
@@ -424,7 +435,7 @@ def serve_workspace(experiment,port=0,open_browser=False,input_paths=()):
                         return self.json_response(dict(job_id=key))
                 if self.path=='/api/cancel':
                     job=(batches if data.get('batch_id') else jobs)[data.get('batch_id') or data['job_id']]
-                    if job['process'].poll() is None and not job['cancel'].exists():
+                    if _running(job) and not job['cancel'].exists():
                         write_json(job['cancel'],dict(reason='USER_CANCELLED_FROM_LOCAL_WORKSPACE'))
                     return self.json_response(dict(cancel_requested=True))
                 self.send_error(404)

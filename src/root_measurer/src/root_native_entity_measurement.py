@@ -514,6 +514,9 @@ def measure_native(entity, output, *, stage='regularized_negative_indices',
             progress(phase,elapsed_seconds=time.monotonic()-start,**data)
     emit('load_entity')
     solid,binding,metadata = load_entity(entity,stage=stage)
+    acquisition=metadata.get('source_volume',{})
+    if coordinate_units is None:coordinate_units=acquisition.get('unit')
+    if scale_mm is None:scale_mm=acquisition.get('scale_mm_per_model_unit')
     emit('entity_loaded', occupied_cells=len(solid.cells),pitch=solid.pitch,
          occupied_shape=(solid.cells.max(axis=0)-solid.cells.min(axis=0)+1).tolist())
     if scale_mm is not None and (not math.isfinite(scale_mm) or scale_mm <= 0):
@@ -709,6 +712,8 @@ def measure_native(entity, output, *, stage='regularized_negative_indices',
                   axis_stage_reference=provenance.get('axis_stage_reference'),
                   functional_acceptance=False,precision_acceptance=False,
                   worker_seconds=time.monotonic()-start,original_entity_unchanged=True)
+    if metadata.get('source_volume'):
+        result['volume_import']=dict(source=metadata['source_volume'],resampling=metadata.get('resampling'))
     write_json(output,result)
     emit('measurement_written',path=Path(output).name)
     return result,solid

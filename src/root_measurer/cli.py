@@ -12,6 +12,8 @@ from .runtime import activate, initialize_workspace, script
 
 
 def parser():
+    activate()
+    from root_measurement_inputs import add_volume_options
     ap = argparse.ArgumentParser(prog="root-measurer", description="根系三维测量器 / Root 3D Measurer")
     ap.add_argument("--version", action="version", version=__version__)
     commands = ap.add_subparsers(dest="command", required=True)
@@ -26,26 +28,23 @@ def parser():
     one.add_argument("--scale-mm", type=float)
     one.add_argument("--max-memory-mb", type=int, default=8192)
     one.add_argument("--section-workers", type=int, default=1, help="独立截面查询进程数（默认 1）")
-    one.add_argument("--voxel-pitch", type=float, help="三维体素文件（.npy/.npz/.tif）的体素间距（必填）")
-    one.add_argument("--voxel-axis-order", choices=["xyz", "zyx"], default="xyz", help="三维体素数组轴序（默认 xyz，CT/TIFF 堆叠常用 zyx）")
-    one.add_argument("--voxel-threshold", type=float, default=0.0, help="数值体素前景阈值（> threshold 为占用，默认 0）")
-    one.add_argument("--voxel-array-key", default=None, help="NPZ 包含多个三维数组时指定键名")
+    add_volume_options(one)
     one.add_argument("--mesh-target-pitch", type=float)
     one.add_argument("--mesh-target-reason", default="")
     imp = commands.add_parser("import-volume", help="将通用三维二值体素（.npy/.npz/.tif）转为原生实体包")
     imp.add_argument("source", type=Path)
     imp.add_argument("--output", type=Path, required=True, help="新输出目录（不可为已有非空目录）")
-    imp.add_argument("--pitch", type=float, required=True, help="正的有限体素间距")
-    imp.add_argument("--axis-order", choices=["xyz", "zyx"], default="xyz")
-    imp.add_argument("--threshold", type=float, default=0.0)
-    imp.add_argument("--array-key", default=None)
+    add_volume_options(imp, short=True)
     imp.add_argument("--label", default=None)
-    batch = commands.add_parser("batch", help="按清单顺序批量测量原生实体")
+    batch = commands.add_parser("batch", help="混合原生实体、体素和网格；清单支持逐样本设置")
     batch.add_argument("manifest", type=Path)
     batch.add_argument("--workspace", type=Path, default=Path("runs/default"))
     batch.add_argument("--scale-mm", type=float)
     batch.add_argument("--max-memory-mb", type=int, default=8192)
     batch.add_argument("--section-workers", type=int, default=1, help="独立截面查询进程数（默认 1）")
+    add_volume_options(batch)
+    batch.add_argument("--mesh-target-pitch", type=float)
+    batch.add_argument("--mesh-target-reason", default="")
     demo = commands.add_parser("demo", help="现场生成小型合成实体；无需下载数据")
     demo.add_argument("--output", type=Path, required=True)
     demo.add_argument("--case", choices=["straight", "curve", "branching_y", "loop"], default="straight")
@@ -105,6 +104,8 @@ def main(argv=None):
                 threshold=args.threshold,
                 array_key=args.array_key,
                 label=args.label,
+                spacing=args.spacing, labels=args.labels, unit=args.unit, metadata=args.metadata,
+                resample_pitch=args.resample_pitch,
             )
             print(json.dumps(info, ensure_ascii=False))
         elif args.command == "measure":
@@ -113,7 +114,9 @@ def main(argv=None):
                 mesh_target_reason=args.mesh_target_reason, vertical_axis=args.vertical_axis,
                 down_sign=args.down_sign, section_workers=args.section_workers,
                 voxel_pitch=args.voxel_pitch, voxel_axis_order=args.voxel_axis_order,
-                voxel_threshold=args.voxel_threshold, voxel_array_key=args.voxel_array_key)
+                voxel_threshold=args.voxel_threshold, voxel_array_key=args.voxel_array_key,
+                voxel_spacing=args.voxel_spacing, voxel_labels=args.voxel_labels, voxel_unit=args.voxel_unit,
+                voxel_metadata=args.voxel_metadata, voxel_resample_pitch=args.voxel_resample_pitch)
             print(json.dumps({"prefix": str(result.prefix), "parameters": result.parameters}, ensure_ascii=False))
         elif args.command == "batch":
             if isinstance(args.section_workers, bool) or not isinstance(args.section_workers, int) or args.section_workers < 1:
@@ -127,8 +130,9 @@ def main(argv=None):
                    str(args.manifest.resolve()), "--output-dir", str(base / f"run{number:03d}"),
                    "--max-memory-mb", str(args.max_memory_mb), "--section-workers", str(args.section_workers),
                    "--vertical-axis", args.vertical_axis, "--down-sign", str(args.down_sign)]
-            if args.scale_mm is not None:
-                cmd += ["--scale-mm", str(args.scale_mm)]
+            from root_measurement_inputs import DEFAULTS
+            defaults = {k: getattr(args, k) for k in DEFAULTS if hasattr(args, k)}
+            cmd += ["--defaults-json", json.dumps(defaults, default=str)]
             return subprocess.call(cmd, env=dict(os.environ, PYTHONUTF8="1", PYTHONDONTWRITEBYTECODE="1"))
         elif args.command == "morphology":
             from root_model_morphology import morphology_csv

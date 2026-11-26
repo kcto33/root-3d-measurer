@@ -113,6 +113,7 @@ def build_parameters(report,*,solid=None,boundary_face_count=None,mesh=None,morp
             length_availability='measurement coverage of supplied input components and geometric endpoints only',
             unavailable_fields='explicit computation or input-geometry limitations; not a biological incompleteness verdict'),
         reference_precision_separate=True,source_geometry_unchanged=True,
+        input_preparation=report.get('volume_import'),
         measured_radius_scope='valid output arc; not complete-reference radius coverage')
 
 

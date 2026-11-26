@@ -47,6 +47,7 @@ export async function installPhenotyping({apiURL, report, graph, paths, scene, p
     <p class="ph-note">先查看直径与方向分布，再指定根基并核对根轴。候选结构、人工确认和几何精度验收分别记录。</p>
     <p id="ph_status" class="ph-status" role="status" aria-live="polite">正在载入当前测量的表型分析…</p>
     <div id="ph_stats" class="ph-grid"></div>
+    <p id="ph_review_summary" class="ph-note" aria-live="polite"></p>
     <div class="ph-actions"><button id="ph_analyze" class="ph-primary">应用设置并分析</button><button id="ph_save">保存分析与标注</button><button id="ph_reload">恢复已保存版本</button></div>
     <details id="ph_settings"><summary>分箱、坐标方向与测量窗口</summary>
       <p id="ph_units" class="ph-note"></p>
@@ -266,7 +267,7 @@ export async function installPhenotyping({apiURL, report, graph, paths, scene, p
       const response=await fetch(apiURL('/phenotyping.json'),{signal:aborter.signal});
       if(!response.ok)await responseError(response);const value=await response.json();
       if(id!==operationId||version!==editVersion)return;
-      accept(value);message('已载入当前测量的表型分析。先指定根基，再核对候选根轴。');
+      accept(value);message('已载入当前测量的表型分析。请核对复核清单、根轴与当前设置。');
     } catch(error) {if(error.name!=='AbortError'&&id===operationId)message('表型分析未载入：'+error.message,'error');}
     finally {if(id===operationId){busy=false;activeAction=null;controller=null;updateButtons();}}
   }
@@ -311,8 +312,11 @@ export async function installPhenotyping({apiURL, report, graph, paths, scene, p
   function render() {
     const d=result.distributions,a=result.architecture,t=result.axis_traits;
     $('#ph_units').textContent='所有长度、窗口、直径分界和参考点坐标均使用 '+unit()+'。'+(report.scale_mm_per_model_unit==null?'当前模型尚未给定毫米尺度。':'毫米尺度来自原测量报告。');
+    if(report.volume_import?.resampling?.applied)$('#ph_units').textContent+=' 输入已按指定间距重采样；参数描述转换后的实体，原始体积 '+format(report.volume_import.resampling.original_volume)+'，转换后 '+format(report.volume_import.resampling.output_volume)+'（源坐标单位³）。';
     $('#ph_binding').textContent='测量 SHA-256：'+measurementHash;
     const stats=$('#ph_stats');stats.replaceChildren();
+    const review=result.review_summary;
+    $('#ph_review_summary').textContent=review?'复核清单：'+review.components_without_unique_base+' 个分量待核对根基，'+review.unresolved_junction_count+' 处分叉续接未决，'+review.unconfirmed_axis_count+' 条根轴未人工确认；未解几何端点 '+(review.unresolved_geometric_endpoint_count??'未评估')+'。局部缺项保留在导出中。':'';
     const interpretable=(a.axes||[]).filter(axis=>['CANDIDATE','CONFIRMED','AUTO_INFERRED'].includes(axis.confirmation_status)).length;
     for(const [label,value,note] of [['已提取轴长',format(d.total_axis_length)+' '+unit(),d.partial_axis?'仅当前提取部分':'完整性与精度另验'],
       ['合格半径覆盖',percent(d.sample_coverage?.qualified_radius_arc_fraction),'以已提取轴长为分母'],

@@ -32,7 +32,52 @@ class Measurement:
         return json.loads(path.read_text(encoding="utf-8"))
 
 
-def import_volume(source, output_dir, *, pitch, axis_order="xyz", threshold=0.0, array_key=None, label=None):
+@dataclass(frozen=True)
+class BatchMeasurement:
+    folder: Path
+
+    @property
+    def summary_path(self):
+        return self.folder / "batch_summary.json"
+
+    @property
+    def summary(self):
+        return json.loads(self.summary_path.read_text(encoding="utf-8"))
+
+
+def batch(inputs, *, workspace="runs/default", defaults=None):
+    """Measure a mixed input list or a JSON manifest; preserve every failure row."""
+    activate()
+    from root_measurement_inputs import DEFAULTS
+    base = Path.cwd()
+    if isinstance(inputs, (str, Path)):
+        manifest = Path(inputs).expanduser().resolve()
+        value = json.loads(manifest.read_text(encoding="utf-8-sig"))
+        base = manifest.parent
+    else:
+        value = inputs if isinstance(inputs, dict) else dict(inputs=inputs)
+    if not isinstance(value, dict) or not isinstance(value.get("inputs"), list) or not 1 <= len(value["inputs"]) <= 1000:
+        raise ValueError("BATCH_SIZE_1_TO_1000_REQUIRED")
+    options = dict(defaults or {}, **value.get("defaults", {}))
+    if set(options) - DEFAULTS.keys():
+        raise ValueError("UNKNOWN_BATCH_DEFAULT_OPTION")
+    root = initialize_workspace(workspace)
+    folder = unused_run(root)
+    requests = root / "snapshot/batch_requests"
+    requests.mkdir(exist_ok=True)
+    request = requests / (folder.name + ".json")
+    with request.open("x", encoding="utf-8") as stream:
+        json.dump(dict(inputs=value["inputs"], defaults=options), stream, ensure_ascii=False, default=str)
+    command = [sys.executable, "-B", str(script("measure_model_batch.py")), "--manifest", str(request),
+               "--manifest-base", str(base), "--output-dir", str(folder)]
+    completed = subprocess.run(command, env=dict(os.environ, PYTHONUTF8="1", PYTHONDONTWRITEBYTECODE="1"))
+    if completed.returncode:
+        raise RuntimeError("BATCH_RUN_FAILED_SEE_LOGS: " + str(folder))
+    return BatchMeasurement(folder)
+
+
+def import_volume(source, output_dir, *, pitch=None, axis_order="auto", threshold=0.0, array_key=None, label=None,
+                  spacing=None, labels=None, unit=None, metadata=None, resample_pitch=None):
     """Import a 3D binary/numeric voxel volume (.npy/.npz/.tif/.tiff) as a SHA-bound native solid."""
     activate()
     from root_voxel_import import import_voxel_volume
@@ -44,58 +89,24 @@ def import_volume(source, output_dir, *, pitch, axis_order="xyz", threshold=0.0,
         threshold=threshold,
         array_key=array_key,
         label=label,
+        spacing=spacing, labels=labels, unit=unit, metadata=metadata, resample_pitch=resample_pitch,
     )
 
 
 def measure(model, *, workspace="runs/default", scale_mm=None, max_memory_mb=8192,
             mesh_target_pitch=None, mesh_target_reason="", vertical_axis="z", down_sign=-1,
-            no_axis_candidate=False, section_workers=1, voxel_pitch=None, voxel_axis_order="xyz",
-            voxel_threshold=0.0, voxel_array_key=None):
+            no_axis_candidate=False, section_workers=1, voxel_pitch=None, voxel_axis_order="auto",
+            voxel_threshold=0.0, voxel_array_key=None, voxel_spacing=None, voxel_labels=None,
+            voxel_unit=None, voxel_metadata=None, voxel_resample_pitch=None):
     activate()
-    if isinstance(section_workers,bool) or not isinstance(section_workers,int) or section_workers<1:
-        raise ValueError("POSITIVE_SECTION_WORKERS_REQUIRED")
-    from root_model_morphology import settings
-    from root_voxel_import import import_voxel_volume, is_voxel_volume_path
-    settings(dict(vertical_axis=vertical_axis, down_sign=down_sign))
-    source = Path(model).expanduser().resolve()
-    if source.is_dir():
-        source /= "entity_prediction.json"
-    if not source.is_file():
-        raise FileNotFoundError(source)
-    if scale_mm is not None and (isinstance(scale_mm, bool) or not math.isfinite(scale_mm) or scale_mm <= 0):
-        raise ValueError("POSITIVE_FINITE_MM_SCALE_REQUIRED")
-    is_voxel = is_voxel_volume_path(source)
-    if is_voxel:
-        if voxel_pitch is None or isinstance(voxel_pitch, bool) or not math.isfinite(float(voxel_pitch)) or float(voxel_pitch) <= 0:
-            raise ValueError("POSITIVE_FINITE_VOXEL_PITCH_REQUIRED")
-        if str(voxel_axis_order).strip().lower() not in ("xyz", "zyx"):
-            raise ValueError("AXIS_ORDER_XYZ_OR_ZYX_REQUIRED")
+    from root_measurement_inputs import DEFAULTS, measurement_command
+    options = {k: v for k, v in locals().copy().items() if k in DEFAULTS}
+    # Validate before allocating output; acquisition metadata and arrays are read by the worker.
+    args, _, _ = measurement_command(model, "__pending__", options)
     root = initialize_workspace(workspace)
     run_dir = unused_run(root)
     prefix = run_dir / "model"
-    mesh = source.suffix.lower() == ".ply"
-    entity_source = source
-    if is_voxel:
-        imported = import_voxel_volume(
-            source,
-            run_dir / "imported_voxel",
-            pitch=float(voxel_pitch),
-            axis_order=voxel_axis_order,
-            threshold=voxel_threshold,
-            array_key=voxel_array_key,
-        )
-        entity_source = Path(imported["entity_path"])
-    args = [sys.executable, "-B", str(script("measure_model_delivery.py")),
-            "--mesh" if mesh else "--entity", str(entity_source), "--output-prefix", str(prefix),
-            "--max-memory-mb", str(max_memory_mb), "--vertical-axis", vertical_axis, "--down-sign", str(down_sign)]
-    if scale_mm is not None:
-        args += ["--scale-mm", str(scale_mm)]
-    args += ["--section-workers", str(section_workers)]
-    if no_axis_candidate:args += ["--no-axis-candidate"]
-    if mesh:
-        args += ["--mesh-workflow", "--mesh-target-reason", mesh_target_reason]
-        if mesh_target_pitch is not None:
-            args += ["--mesh-target-pitch", str(mesh_target_pitch)]
+    args[args.index("--output-prefix") + 1] = str(prefix)
     result = subprocess.run(args, env=dict(os.environ, PYTHONUTF8="1", PYTHONDONTWRITEBYTECODE="1"))
     if result.returncode:
         raise MeasurementError(prefix, result.returncode)

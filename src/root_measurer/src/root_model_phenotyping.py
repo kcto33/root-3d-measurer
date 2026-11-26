@@ -104,6 +104,18 @@ def analyze_measurement(measurement, *, options=None, annotation_profile=None):
         scale_mm_per_model_unit=scale)
     profile = dict(schema_version=ANNOTATION_SCHEMA, measurement_sha256=before['sha256'],
                    settings=config, annotations=architecture.get('annotations', annotations))
+    review = dict(
+        component_count=len(architecture['components']),
+        components_without_unique_base=sum(len(c.get('root_base_node_ids', [])) != 1 for c in architecture['components']),
+        unresolved_junction_count=sum(j.get('status') == 'UNRESOLVED_CONTINUATION' for j in architecture.get('junction_decisions', [])),
+        confirmed_axis_count=sum(a.get('confirmation_status') == 'CONFIRMED' for a in architecture['axes']),
+        unconfirmed_axis_count=sum(a.get('confirmation_status') != 'CONFIRMED' for a in architecture['axes']),
+        unresolved_geometric_endpoint_count=(sum(e.get('status') != 'geometric_surface_estimate' for e in report['geometric_endpoints'])
+                                             if 'geometric_endpoints' in report else None),
+        qualified_radius_arc_fraction=distributions['sample_coverage'].get('qualified_radius_arc_fraction'),
+        partial_axis=distributions['partial_axis'],
+        missing_values_interpolated=False,
+    )
     _check_source(report)
     if file_reference(measured) != before:
         raise ValueError('MEASUREMENT_CHANGED')
@@ -114,6 +126,7 @@ def analyze_measurement(measurement, *, options=None, annotation_profile=None):
         unit=distributions['unit'], partial_axis=distributions['partial_axis'],
         distributions=distributions, architecture=architecture, axis_traits=traits,
         measurement_coverage=coverage, source_geometry_unchanged=True,
+        review_summary=review,
         confirmation_is_accuracy_validation=False,
         scope='observed geometry and explicitly based auto-inferred or human-reviewed root axes; no mass, soil, time or crop-specific inference')
 
@@ -157,6 +170,7 @@ def phenotyping_csv(value, kind='distributions'):
                     architecture_status=value['architecture']['status'],
                     axis_interpretation_scope='local_bridge_fragments' if value['architecture'].get('analysis_regions') else 'rooted_components_or_unoriented_geometry',
                     vertical_axis=value['settings']['vertical_axis'], down_sign=value['settings']['down_sign'])
+    metadata.update({'review_' + k: v for k, v in value.get('review_summary', {}).items()})
     rows = [dict(metadata, **r) for r in records]
     fields = list(dict.fromkeys([*metadata, *(key for row in rows for key in row)]))
     out = io.StringIO(newline='')

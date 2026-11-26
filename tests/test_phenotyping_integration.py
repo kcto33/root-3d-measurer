@@ -191,6 +191,53 @@ def test_empty_axis_still_has_a_serializable_report(tmp_path):
     json.dumps(result, allow_nan=False)
 
 
+def test_review_continuation_save_restore_and_csv_agree(measurement):
+    original = measurement.read_bytes()
+    candidate = phenotype(measurement)
+    assert candidate['review_summary']['components_without_unique_base'] == 1
+    profile = rooted_profile(candidate, confirmed=True)
+    profile['annotations']['junction_continuations'] = [dict(node_id=1, incoming_node_id=0, outgoing_node_id=4)]
+    reviewed = phenotype(measurement, annotation_profile=profile)
+    assert reviewed['review_summary']['components_without_unique_base'] == 0
+    assert reviewed['review_summary']['unconfirmed_axis_count'] == 0
+    main_axis = next(a for a in reviewed['architecture']['axes'] if a['parent_axis_id'] is None)
+    assert main_axis['node_ids'] == [0, 1, 4, 5]
+    folder = measurement.parent / 'phenotyping/run00001/analysis'
+    files = export_phenotyping(reviewed, folder)
+    restored = phenotype(measurement, annotation_profile=latest_annotation_profile(measurement))
+    assert restored == reviewed
+    rows = list(csv.DictReader(io.StringIO(Path(files['axes']).read_text(encoding='utf-8-sig'))))
+    assert rows and all(r['review_unconfirmed_axis_count'] == '0' for r in rows)
+    assert measurement.read_bytes() == original
+
+
+@pytest.mark.parametrize('cycle,disjoint', [(True, False), (False, True), (True, True)])
+def test_complex_partial_graph_exports_available_parts(tmp_path, cycle, disjoint):
+    points = [[0, 0, 0], [0, 0, 1], [0, 0, 2], [1, 0, 1], [1, 0, 2]]
+    edges = [(0, 1), (1, 2), (1, 3), (3, 4)]
+    if cycle:
+        edges.append((4, 2))
+    if disjoint:
+        points += [[4, 0, 0], [4, 0, .01]]
+        edges.append((5, 6))
+    adjacency = [[] for _ in points]
+    for a, b in edges:
+        adjacency[a].append(b);adjacency[b].append(a)
+    source = tmp_path / 'partial_measurement.json'
+    source.write_text(json.dumps(dict(status='NATIVE_OUTPUT_WITH_EXPLICIT_GAPS', coordinate_units='model_units',
+        candidate_centerline=dict(points=points, adjacency=adjacency),
+        geometric_endpoints=[dict(node_id=0, status='endpoint_unresolved')],
+        radius_curve=dict(sampling='edge_midpoint', rows=[dict(node_ids=[0, 1], radius=.1, available=True, status='VALID')]))))
+    before = source.read_bytes()
+    result = phenotype(source)
+    files = export_phenotyping(result, tmp_path / 'exports/partial')
+    assert result['partial_axis'] and result['review_summary']['unresolved_geometric_endpoint_count'] == 1
+    assert result['architecture']['edge_partition']['all_source_edges_owned_exactly_once']
+    assert 0 < result['review_summary']['qualified_radius_arc_fraction'] < 1
+    assert all(Path(path).is_file() for path in files.values())
+    assert source.read_bytes() == before
+
+
 @pytest.fixture
 def local_app(tmp_path, monkeypatch):
     """Exercise the production Handler through a real TCP server, without spawning a browser."""
